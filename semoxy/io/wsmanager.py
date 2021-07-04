@@ -35,7 +35,6 @@ class WebsocketConnectionManager:
         """
         broadcasts a message to all connections
         :param msg: the msg to broadcast
-        :param except_: a websocket the packet shouldn't be sent to
         """
         for ws in self.connections:
             try:

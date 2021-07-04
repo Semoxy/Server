@@ -1,6 +1,6 @@
-from mcweb import MCWeb
+from semoxy import Semoxy
 
 
 if __name__ == "__main__":
-    app = MCWeb()
+    app = Semoxy()
     app.start()

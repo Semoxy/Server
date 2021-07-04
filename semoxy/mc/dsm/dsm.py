@@ -7,6 +7,9 @@ from .protocol import PacketBuilder, TextComponent
 
 
 class Messages:
+    """
+    enum class for messages that get send by the DSM server
+    """
     __slots__ = ()
 
     DISCONNECT_STARTING_MESSAGE = TextComponent.Builder("[").set_color(TextComponent.Color.GRAY).add_extra(TextComponent.Builder("DSM").set_flag(TextComponent.Flag.BOLD).set_color(TextComponent.Color.GOLD).build()).add_extra(TextComponent.Builder("] ").set_color(TextComponent.Color.GRAY).build()).add_extra(TextComponent.Builder("Please wait a Moment").set_color(TextComponent.Color.RED).build()).add_extra(TextComponent.Builder(", this ").set_color(TextComponent.Color.GRAY).build()).add_extra(TextComponent.Builder("Server ").set_color(TextComponent.Color.GOLD).set_flag(TextComponent.Flag.BOLD).build()).add_extra(TextComponent.Builder("is ").set_color(TextComponent.Color.GRAY).build()).add_extra(TextComponent.Builder("starting ").set_color(TextComponent.Color.GREEN).build()).add_extra(TextComponent.Builder("now!").set_color(TextComponent.Color.GRAY).build()).build().as_json()
@@ -15,6 +18,9 @@ class Messages:
 
 
 class DSMClientConnection(ClientConnection):
+    """
+    overrides for the ClientConnection that are required for the DSM
+    """
     __slots__ = "permitted_players", "onclose"
 
     QUERY_RESPONSE = {
@@ -44,7 +50,7 @@ class DSMClientConnection(ClientConnection):
 
     def handle_query(self, handshake_packet):
         packet = PacketBuilder(0x00)
-        # use our mcweb response
+        # use our semoxy response
         query = DSMClientConnection.QUERY_RESPONSE
         # set protocol version to protocol of client so it seems like server for every version
         query["version"]["protocol"] = handshake_packet.protocol_version
@@ -78,6 +84,9 @@ class DSMClientConnection(ClientConnection):
 
 
 class DSMServer:
+    """
+    the fake minecraft server that listens for client connections
+    """
     __slots__ = "conn", "serversocket", "keypair", "running", "eligible_players", "loop"
 
     def __init__(self, conn, loop):
@@ -85,16 +94,24 @@ class DSMServer:
         self.serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.keypair = generate_keypair()
         self.running = False
-        self.eligible_players = ["bedrockcrafterlp"]
+        # hardcoded names for testing
+        self.eligible_players = ["ximanton_"]
         self.loop = loop
 
     def stop(self):
+        """
+        stops the server
+        should the the actual minecraft server
+        """
         if self.running:
             self.running = False
             self.serversocket.close()
             print("START MC")
 
     async def start(self):
+        """
+        starts the DSM server and listens for connections
+        """
         self.serversocket.bind(self.conn)
         self.serversocket.listen(4)
         self.serversocket.setblocking(False)
@@ -108,6 +125,10 @@ class DSMServer:
             self.loop.create_task(self.handle_connection(client))
 
     async def handle_connection(self, conn):
+        """
+        handles a client connections and blocks until the client disconnected
+        :param conn: the connected client socket
+        """
         print("Client Connected")
         connection = DSMClientConnection(self.eligible_players, self.stop, conn, self.loop, self.keypair[0], self.keypair[1])
         await connection.block()

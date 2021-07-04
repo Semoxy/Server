@@ -53,6 +53,10 @@ class Config:
 
     @staticmethod
     def public_json():
+        """
+        returns the parts of the config that can be exposed to clients
+        :return:
+        """
         java_versions = {}
         for k, v in Config.JAVA["installations"].items():
             java_versions[k] = v["displayName"]
@@ -64,6 +68,11 @@ class Config:
 
     @staticmethod
     def get_docker_secret(key):
+        """
+        tries to access a docker secret
+        :param key: the secret name
+        :return: the value as string if the secret was found, else None
+        """
         try:
             with open(f"/run/secrets/{key}", encoding="utf-8") as f:
                 return f.read()

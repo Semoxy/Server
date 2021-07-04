@@ -2,12 +2,15 @@ import uuid
 from json import dumps as json_dumps
 from os import urandom
 
-from .encryption import generate_login_hash, fit_to_secret_lenght, create_cipher, decode_token_and_secret
+from .encryption import generate_login_hash, fit_to_secret_length, create_cipher, decode_token_and_secret
 from .protocol import PacketBuilder, Packet, HandshakePacket, EncryptionResponsePacket, EncryptionRequestPacket
 from ..mojang import has_player_joined
 
 
 class ClientConnection:
+    """
+    represents a connected client and its state
+    """
     __slots__ = "secret", "token", "cipher", "socket", "username", "uuid", "public_key", "private_key", "encrypted", "connected", "state", "loop"
 
     DEFAULT_QUERY = {
@@ -40,12 +43,20 @@ class ClientConnection:
         self.loop = loop
 
     def send_packet(self, packet):
+        """
+        sends a packet to the client
+        :param packet: the raw data to send
+        """
         # encrypt packet if connection is encrypted
         if self.encrypted:
-            packet = self.cipher.encrypt(fit_to_secret_lenght(packet, self.secret))
+            packet = self.cipher.encrypt(fit_to_secret_length(packet, self.secret))
         self.socket.sendall(packet)
 
     async def receive_packet(self):
+        """
+        waits for a packet and parses it
+        :return: the parsed Packet instance, or None on error or timeout
+        """
         # wait for a packet,
         req = await self.loop.sock_recv(self.socket, 2097151)
         if req:
@@ -56,12 +67,22 @@ class ClientConnection:
             return Packet(req)
 
     def handle_query(self, handshake_packet):
+        """
+        event that is called when the client requests a server query.
+        sends the default query if not overridden.
+        :param handshake_packet: the packet that triggered the event
+        """
         packet = PacketBuilder(0x00)
         # send back default static query
         packet.add_string(json_dumps(ClientConnection.DEFAULT_QUERY))
         self.send_packet(packet.build())
 
     def handle_handshake(self, packet):
+        """
+        handles a handshake packet.
+        not safe to override
+        :param packet: the Packet instance
+        """
         # parse packet as HandshakePacket
         packet = HandshakePacket(packet)
         # sometimes empty packet gets sent, ignore it
@@ -74,6 +95,11 @@ class ClientConnection:
             self.handle_query(packet)
 
     def handle_ping(self, packet):
+        """
+        handles a client ping and disconnects the client
+        not useful to override.
+        :param packet: the packet that requested the ping
+        """
         # read junk from packet,
         j = packet.read_long()
         packet = PacketBuilder(0x01)
@@ -84,9 +110,15 @@ class ClientConnection:
         self.disconnect()
 
     def disconnect(self):
+        """
+        disconnects the client
+        """
         self.connected = False
 
     async def block(self):
+        """
+        serves this client until disconnected
+        """
         self.connected = True
         while self.connected:
             # wait for packet
@@ -114,6 +146,10 @@ class ClientConnection:
         self.socket.close()
 
     def send_login_success(self):
+        """
+        sends a login success packet to the client and upgrades the state
+        :return:
+        """
         packet = PacketBuilder(0x02)
         packet.add_uuid(self.uuid)
         packet.add_string(self.username)
@@ -121,15 +157,32 @@ class ClientConnection:
         self.state = 2
 
     def pre_login(self, uuid, name):
+        """
+        event handler that is called after the session verification and the encryption has been done
+        :param uuid: the uuid of the connected player
+        :param name: the name of the connected player
+        :return: True, if the login should be proceeded or False to disconnect the player
+        """
         return True
 
     def post_login(self):
+        """
+        called after the login success packet has been sent
+        """
         pass
 
     def login_error(self):
+        """
+        called when an error occurred during login
+        """
         pass
 
     def handle_encryption_response(self, client_packet):
+        """
+        handles the encryption response packet and enabled encryption and verifies the client session.
+        not safe to override.
+        :param client_packet: the encryption response packet that got sent by the client
+        """
         # parse packet
         encryption_response = EncryptionResponsePacket(client_packet)
         # decode shared secret and control token

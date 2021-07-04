@@ -18,12 +18,12 @@ from .mc.servermanager import ServerManager
 from .io.regexes import Regexes
 
 
-class MCWeb(Sanic):
+class Semoxy(Sanic):
+    """
+    the Sanic server for Semoxy
+    """
     __slots__ = "server_manager", "public_ip", "mongo", "password_hasher", "pepper"
 
-    """
-    class that represents this Sanic instance
-    """
     def __init__(self):
         super().__init__(__name__)
         Config.load(self)
@@ -48,28 +48,42 @@ class MCWeb(Sanic):
     async def after_server_stop(self, app, loop):
         await self.server_manager.shutdown_all()
 
-    async def _check_ip(self, s):
-        result = Regexes.IP.match(s)
-        if not result:
-            socket.gethostbyname(s)
+    @staticmethod
+    async def check_ip(s):
+        """
+        converts an ip address or hostname to an numeric IP
+        :param s: the ip to convert
+        :return: the converted ip
+        """
+        if not Regexes.IP.match(s):
+            s = socket.gethostbyname(s)
         return s
 
     async def reload_ip(self):
+        """
+        reloads the public IP of the Semoxy instance host
+        :return:
+        """
         if Config.STATIC_IP:
             ip = Config.STATIC_IP
         else:
             async with aiohttp.ClientSession() as session:
                 async with session.get("https://api.ipify.org/") as resp:
                     ip = await resp.text()
-        self.public_ip = await self._check_ip(ip)
+        self.public_ip = await Semoxy.check_ip(ip)
 
     async def before_server_start(self, app, loop):
         self.mongo = MongoClient(self, loop).db
         await self.reload()
 
     async def reload(self):
+        """
+        reloads the Semoxy instance, the public IP and deletes expired sessions
+        :return:
+        """
         await self.reload_ip()
         try:
+            # invalidate expired sessions and websocket tickets
             await self.mongo["session"].delete_many({"expiration": {"$lt": time.time()}})
             await self.mongo["wsticket"].delete_many({"expiration": {"$lt": time.time()}})
             await self.server_manager.init()

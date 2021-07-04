@@ -18,7 +18,7 @@ class ServerManager:
     __slots__ = "mc", "servers", "versions"
 
     """
-    class for managing all servers of the mcweb instance
+    class for managing all servers of the semoxy instance
     """
     def __init__(self, mc):
         self.mc = mc
@@ -196,7 +196,7 @@ eula=true
 
     async def global_broadcast(self, msg):
         """
-        broadcasts a message to all connected clients of this mcweb instance
+        broadcasts a message to all connected clients of this semoxy instance
         :param msg: the message to broadcast
         """
         for server in self.servers:
