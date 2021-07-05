@@ -75,6 +75,6 @@ class Config:
         """
         try:
             with open(f"/run/secrets/{key}", encoding="utf-8") as f:
-                return f.read()
+                return f.read().strip()
         except FileNotFoundError:
             return None
