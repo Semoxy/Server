@@ -39,6 +39,18 @@ async def login_get(req):
         return json_res({"info": "you are already logged in", "status": 200})
 
 
+@account_blueprint.get("/session")
+async def check_session(req):
+    """
+    returns information about a users session
+    """
+    out = {"loggedIn": req.ctx.session is not None}
+    if req.ctx.session:
+        out["expiration"] = req.ctx.session.expiration
+        out["userId"] = req.ctx.session.user_id
+    return json_res(out)
+
+
 @account_blueprint.get("/logout")
 @requires_login()
 async def logout(req):
