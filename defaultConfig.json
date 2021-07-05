@@ -12,7 +12,7 @@
       }
     },
     "forge": {
-      "getVersions": "http://files.minecraftforge.net/maven/net/minecraftforge/forge/maven-metadata.json",
+      "getVersions": "https://files.minecraftforge.net/maven/net/minecraftforge/forge/maven-metadata.json",
       "downloadBuild": "https://files.minecraftforge.net/maven/net/minecraftforge/forge/{build}/forge-{build}-installer.jar",
       "supports": {
         "mods": true,
@@ -44,11 +44,11 @@
   "pepper": "20 rndm pepper bytes",
   "maxRam": 6,
   "mongoDB": {
-    "host": "mongo.mcweb",
+    "host": "localhost",
     "port": 27017,
     "username": "admin",
     "password": "",
-    "database": "mcweb"
+    "database": "semoxy"
   },
   "serverDir": "./servers",
   "javaSettings": {
