@@ -4,11 +4,11 @@ from sanic.blueprints import Blueprint
 from sanic.response import file
 from websockets.exceptions import ConnectionClosed
 
-from ..util import server_endpoint, requires_server_online, json_res, requires_post_params, requires_login, \
-    console_ws, catch_keyerrors
 from ..io.wspackets import ConsoleInfoPacket, ConsoleConnectedPacket
 from ..mc.server import MinecraftServer
 from ..util import TempDir
+from ..util import server_endpoint, requires_server_online, json_res, requires_post_params, requires_login, \
+    console_ws, catch_keyerrors
 
 server_blueprint = Blueprint("server", url_prefix="server")
 
@@ -54,10 +54,10 @@ async def console_websocket(req, ws, i):
     """
     websocket endpoints for console output and server state change
     """
-    if req.ctx.user is None:
+    """if req.ctx.user is None:
         await ConsoleInfoPacket("please login using POST to /account/login before using this").send(ws)
         await ws.close()
-        return
+        return"""
     await req.ctx.server.connections.connected(ws, req.ctx.ticket, req.ctx.user)
     await ConsoleConnectedPacket().send(ws)
     try:

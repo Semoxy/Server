@@ -1,12 +1,11 @@
 import secrets
-import time
 
-from bson.objectid import ObjectId
 from sanic.blueprints import Blueprint
+from sanic.request import Request
 
 from ..models import User
-from ..io.config import Config
-from ..util import json_res, requires_post_params, requires_login, catch_keyerrors
+from ..models import WebsocketTicket
+from ..util import json_res, requires_post_params, requires_login
 
 account_blueprint = Blueprint("account", url_prefix="account")
 
@@ -68,33 +67,11 @@ async def fetch_me(req):
     return json_res({"username": req.ctx.user.name, "permissions": req.ctx.user.permissions})
 
 
-@account_blueprint.post("/ticket")
+@account_blueprint.get("/ticket")
 @requires_login()
-@requires_post_params("type", "data")
-@catch_keyerrors()
-async def open_ticket(req):
-    user = req.ctx.user
-    type_ = req.json["type"].lower()
-    data = req.json["data"]
-    if type_ == "server.console":
-        if "serverId" not in data.keys():
-            return json_res({"error": "Missing Server Id", "description": "you have to specify the server id for the type server.console", "status": 400}, status=400)
-        # Check if serverId is valid bson ObjectId and if a server with that id exists
-        if (not ObjectId.is_valid(data["serverId"])) | (ObjectId(data["serverId"]) not in await req.app.server_manager.get_ids()):
-            return json_res({"error": "Invalid Server Id", "description": "the server id you entered is either no valid bson ObjectId or does not match a server", "status": 400}, status=400)
-        # save ObjectId string from request as ObjectId in mongo
-        data["serverId"] = ObjectId(data["serverId"])
-    rec = await req.app.database["wsticket"].find_one({"userId": user.id, "endpoint": {"type": type_, "data": data}})
-    if rec and rec["expiration"] >= time.time():
-        del rec["_id"]
-        return json_res(rec)
-    elif rec:
-        await req.app.database["wsticket"].delete_one({"_id": rec["_id"]})
-    ticket = await get_new_ticket(req.app.database)
-    doc = {"ticket": ticket, "userId": user.id, "endpoint": {"type": type_, "data": data}, "expiration": int(time.time() + Config.SESSION_EXPIRATION)}
-    await req.app.database["wsticket"].insert_one(doc)
-    del doc["_id"]
-    return json_res(doc)
+async def open_ticket(req: Request):
+    ticket: WebsocketTicket = await req.ctx.user.create_ticket(req.ip, req.headers["User-Agent"] or "unknown agent")
+    return json_res({"success": "ticket created", "data": {"token": ticket.token}})
 
 
 async def get_new_ticket(db):

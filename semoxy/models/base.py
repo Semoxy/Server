@@ -1,8 +1,10 @@
 from __future__ import annotations
+
+import secrets
 from typing import Optional, Set, TYPE_CHECKING
 
-from motor.core import AgnosticCollection
 from bson.objectid import ObjectId
+from motor.core import AgnosticCollection
 
 if TYPE_CHECKING:
     from .. import Semoxy
@@ -13,7 +15,7 @@ class Model:
     """
     base class for mongodb database models
     """
-    __tablename__: str = "invalid"
+    __collection__: str = "invalid"
     __slots__ = "_id",
     _slots = set()
 
@@ -44,7 +46,7 @@ class Model:
         """
         the collection this model refers to
         """
-        return Config.SEMOXY_INSTANCE.database[cls.__tablename__]
+        return Config.SEMOXY_INSTANCE.database[cls.__collection__]
 
     @classmethod
     async def fetch(cls, **kwargs) -> Optional[Model]:
@@ -91,14 +93,27 @@ class Model:
         if missing:
             raise ValueError(f"missing attributes: {missing}")
 
-        result = await cls.collection().insert_one(kwargs)
-        return cls({**kwargs, "_id": result.inserted_id})
+        await cls.collection().insert_one(kwargs)
+        return cls(kwargs)
 
     async def delete(self):
         """
         deletes this instance from the database
         """
         return await self.collection().delete_one({"_id": self._id})
+
+    @classmethod
+    async def get_unused_token(cls, key: str, length: int = 32) -> str:
+        """
+        Method to make sure that the session id is unique
+        :return: a unique session id
+        """
+        do = True
+        sid = None
+        while do:
+            sid = secrets.token_urlsafe(length)
+            do = bool(await cls.collection().find_one({key: sid}))
+        return sid
 
     def __str__(self):
         return f"<{self.__class__.__name__} {' '.join([f'{s}={getattr(self, s)}' for s in self.slots()])}>"

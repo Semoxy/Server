@@ -4,20 +4,20 @@ import time
 from typing import Optional
 
 import aiohttp
-from argon2 import PasswordHasher
 import pymongo.errors
+from argon2 import PasswordHasher
+from motor.core import AgnosticDatabase
 from sanic import Sanic
 
-from .models import User, Session
-from .util import json_res
 from .endpoints.auth import account_blueprint
 from .endpoints.misc import misc_blueprint
 from .endpoints.server import server_blueprint
 from .io.config import Config
 from .io.mongo import MongoClient
-from .mc.servermanager import ServerManager
 from .io.regexes import Regexes
-from motor.core import AgnosticDatabase
+from .mc.servermanager import ServerManager
+from .models import Session
+from .util import json_res
 
 
 class Semoxy(Sanic):

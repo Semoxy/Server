@@ -1,10 +1,9 @@
 from sanic.blueprints import Blueprint
-
-from ..util import requires_login, json_res
-from ..io.config import Config
-
 from sanic.request import Request
 from sanic.response import HTTPResponse
+
+from ..io.config import Config
+from ..util import requires_login, json_res
 
 misc_blueprint = Blueprint("misc")
 

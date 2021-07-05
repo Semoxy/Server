@@ -1,8 +1,8 @@
 import os
 import zipfile
+from asyncio import Event
 from time import strftime
 from typing import Any, Dict, Optional
-from asyncio import Event
 
 from ..io.config import Config
 from ..io.regexes import Regexes

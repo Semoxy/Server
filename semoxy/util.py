@@ -1,8 +1,9 @@
 import os
 import shutil
-import time
 import sys
 from typing import Union, Tuple
+
+from .models import WebsocketTicket
 
 if sys.version_info.minor < 7:
     from async_generator import asynccontextmanager
@@ -18,8 +19,6 @@ import aiohttp
 from bson.objectid import ObjectId
 from sanic.response import json, redirect, HTTPResponse
 from sanic.request import Request
-
-from .models import User
 
 
 def json_res(di: Union[dict, list], **kwargs) -> HTTPResponse:
@@ -158,36 +157,35 @@ def console_ws():
     def decorator(f):
         @wraps(f)
         async def decorated_function(req, *args, **kwargs):
-            if "ticket" not in req.args.keys():
-                return json_res({"error": "No Ticket Provided", "status": 401, "description": "open a ticket using /account/ticket<endpoint>"}, status=401)
-            t = req.args.get("ticket")
-            user = User(req.app.database)
-            # TODO: fix ticket stuff
-            req.ctx.user = await user.fetch_by_ticket(t)
+            ticket_token = req.args.get("ticket")
+            if not ticket_token:
+                return json_res({"error": "No Ticket Provided", "status": 401, "description": "open a ticket using /account/ticket"}, status=401)
+
+            ticket = await WebsocketTicket.fetch_from_token(ticket_token)
+
+            if ticket.is_expired:
+                await ticket.delete()
+                return json_res({"error": "Ticket expired", "status": 401, "description": "please open a new ticket"}, status=401)
+
+            if BrowserMetrics(req).hash != ticket.browserMetrics:
+                await ticket.delete()
+                return json_res({"error": "Access error", "status": 400, "description": "we couldn't verify your browser"}, status=400)
+
+            req.ctx.user = await ticket.get_user()
             if not req.ctx.user:
-                return json_res({"error": "Invalid Ticket", "status": 401,
-                                 "description": "open a ticket using post /account/ticket"}, status=401)
-            rec = await req.app.database["wsticket"].find_one({"ticket": t})
-            if not rec:
-                return json_res({"error": "Invalid Ticket", "status": 401,
-                                 "description": "open a ticket using /account/ticket/<endpoint>"}, status=401)
-            if rec["expiration"] < time.time():
-                return json_res({"error": "Ticket expired", "status": 401, "description": "open a new ticket using /account/ticket/<endpoint>"}, status=401)
-            req.ctx.ticket = rec
-            server = req.ctx.server
-            endpoint = rec["endpoint"]
-            if endpoint["type"] == "server.console" and endpoint["data"]["serverId"] != server.id:
-                return json_res({"error": "Invalid Ticket", "status": 401, "description": "the ticket you provided is not opened for this server"})
-            await req.app.database["wsticket"].delete_one({"_id": rec["_id"]})
-            response = await f(req, *args, **kwargs)
-            return response
+                await ticket.delete()
+                return json_res({"error": "Invalid Ticket", "status": 401, "description": "open a ticket using /account/ticket"}, status=401)
+
+            req.ctx.ticket = ticket
+
+            return await f(req, *args, **kwargs)
         return decorated_function
     return decorator
 
 
 def catch_keyerrors():
     """
-    catches all keyerrors in the decorated route and cancels request
+    catches all KeyErrors in the decorated route and cancels request
     """
     def decorator(f):
         @wraps(f)

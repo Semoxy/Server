@@ -1,14 +1,14 @@
-import os
-from typing import Optional
-import shutil
 import asyncio
+import os
+import shutil
+from typing import Optional
 
 import aiofiles
 
-from ..io.config import Config
 from .server import MinecraftServer
 from .versions.base import VersionProvider
 from .versions.manager import VersionManager
+from ..io.config import Config
 from ..io.regexes import Regexes
 from ..io.wspackets import ServerCreationPacket, ServerDeletionPacket
 from ..util import json_res, download_and_save
