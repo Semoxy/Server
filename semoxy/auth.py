@@ -9,7 +9,7 @@ from .io.config import Config
 
 
 class User:
-    __slots__ = "db", "id", "name", "password", "perms", "salt", "last_server"
+    __slots__ = "db", "id", "name", "password", "perms", "salt"
 
     """
     class for representing a single registered user
@@ -21,7 +21,6 @@ class User:
         self.password = ""
         self.perms = ""
         self.salt = b""
-        self.last_server = None
 
     async def fetch_by_name(self, name):
         """
@@ -42,7 +41,6 @@ class User:
         self.password = user["password"]
         self.perms = user["permissions"]
         self.salt = user["salt"].encode()
-        self.last_server = user["lastServer"]
 
     async def fetch_by_id(self, i):
         """
@@ -121,9 +119,6 @@ class User:
 
     def __repr__(self):
         return f"User[name={self.name}]"
-
-    async def set_last_server(self, s):
-        await self.db["user"].update_one({"_id": self.id}, {"$set": {"lastServer": s.id}})
 
 
 class Session:

@@ -20,7 +20,6 @@ async def get_server(req, i):
     """
     endpoint for getting server information for a single server
     """
-    await req.ctx.user.set_last_server(req.ctx.server)
     return json_res(req.ctx.server.json())
 
 

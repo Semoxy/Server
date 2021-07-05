@@ -67,7 +67,7 @@ async def fetch_me(req):
     """
     sends information about the current user to the client
     """
-    return json_res({"username": req.ctx.user.name, "permissions": req.ctx.user.perms, "lastServer": str(req.ctx.user.last_server) if req.ctx.user.last_server else None})
+    return json_res({"username": req.ctx.user.name, "permissions": req.ctx.user.perms})
 
 
 @account_blueprint.post("/ticket")
