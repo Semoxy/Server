@@ -2,7 +2,7 @@ import os
 import shutil
 import time
 import sys
-from typing import Union, Tuple, List
+from typing import Union, Tuple
 
 if sys.version_info.minor < 7:
     from async_generator import asynccontextmanager
@@ -19,7 +19,7 @@ from bson.objectid import ObjectId
 from sanic.response import json, redirect, HTTPResponse
 from sanic.request import Request
 
-from .auth import User
+from .models import User
 
 
 def json_res(di: Union[dict, list], **kwargs) -> HTTPResponse:
@@ -161,12 +161,13 @@ def console_ws():
             if "ticket" not in req.args.keys():
                 return json_res({"error": "No Ticket Provided", "status": 401, "description": "open a ticket using /account/ticket<endpoint>"}, status=401)
             t = req.args.get("ticket")
-            user = User(req.app.mongo)
+            user = User(req.app.database)
+            # TODO: fix ticket stuff
             req.ctx.user = await user.fetch_by_ticket(t)
             if not req.ctx.user:
                 return json_res({"error": "Invalid Ticket", "status": 401,
                                  "description": "open a ticket using post /account/ticket"}, status=401)
-            rec = await req.app.mongo["wsticket"].find_one({"ticket": t})
+            rec = await req.app.database["wsticket"].find_one({"ticket": t})
             if not rec:
                 return json_res({"error": "Invalid Ticket", "status": 401,
                                  "description": "open a ticket using /account/ticket/<endpoint>"}, status=401)
@@ -177,7 +178,7 @@ def console_ws():
             endpoint = rec["endpoint"]
             if endpoint["type"] == "server.console" and endpoint["data"]["serverId"] != server.id:
                 return json_res({"error": "Invalid Ticket", "status": 401, "description": "the ticket you provided is not opened for this server"})
-            await req.app.mongo["wsticket"].delete_one({"_id": rec["_id"]})
+            await req.app.database["wsticket"].delete_one({"_id": rec["_id"]})
             response = await f(req, *args, **kwargs)
             return response
         return decorated_function

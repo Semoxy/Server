@@ -1,13 +1,14 @@
 import os
 import socket
 import time
+from typing import Optional
 
 import aiohttp
 from argon2 import PasswordHasher
 import pymongo.errors
 from sanic import Sanic
 
-from .auth import User, Session
+from .models import User, Session
 from .util import json_res
 from .endpoints.auth import account_blueprint
 from .endpoints.misc import misc_blueprint
@@ -16,23 +17,24 @@ from .io.config import Config
 from .io.mongo import MongoClient
 from .mc.servermanager import ServerManager
 from .io.regexes import Regexes
+from motor.core import AgnosticDatabase
 
 
 class Semoxy(Sanic):
     """
     the Sanic server for Semoxy
     """
-    __slots__ = "server_manager", "public_ip", "mongo", "password_hasher", "pepper"
+    __slots__ = "server_manager", "public_ip", "database", "password_hasher", "pepper"
 
     def __init__(self):
         super().__init__(__name__)
         Config.load(self)
-        self.server_manager = ServerManager(self)
+        self.server_manager: ServerManager = ServerManager(self)
         self.register_routes()
-        self.public_ip = ""
-        self.mongo = None
-        self.password_hasher = PasswordHasher()
-        self.pepper = (Config.get_docker_secret("pepper") or Config.PEPPER).encode()
+        self.public_ip: str = ""
+        self.database: Optional[AgnosticDatabase] = None
+        self.password_hasher: PasswordHasher = PasswordHasher()
+        self.pepper: bytes = (Config.get_docker_secret("pepper") or Config.PEPPER).encode()
 
     def register_routes(self) -> None:
         """
@@ -73,7 +75,7 @@ class Semoxy(Sanic):
         self.public_ip = await Semoxy.check_ip(ip)
 
     async def before_server_start(self, app, loop):
-        self.mongo = MongoClient(self, loop).db
+        self.database = MongoClient(loop).semoxy_db
         await self.reload()
 
     async def reload(self):
@@ -84,35 +86,30 @@ class Semoxy(Sanic):
         await self.reload_ip()
         try:
             # invalidate expired sessions and websocket tickets
-            await self.mongo["session"].delete_many({"expiration": {"$lt": time.time()}})
-            await self.mongo["wsticket"].delete_many({"expiration": {"$lt": time.time()}})
+            await self.database["session"].delete_many({"expiration": {"$lt": time.time()}})
+            await self.database["wsticket"].delete_many({"expiration": {"$lt": time.time()}})
             await self.server_manager.init()
         except pymongo.errors.ServerSelectionTimeoutError:
             print("No connection to mongodb could be established. Check your preferences in the config.json and if your mongo server is running!")
             self.stop()
             exit(1)
 
-    async def set_session_middleware(self, req) -> None:
+    async def set_session_middleware(self, req):
         """
         middleware that fetches and sets the session on the request object
         """
         sid = req.token
+        req.ctx.session = None
+        req.ctx.user = None
         if sid:
-            session = Session(self.mongo)
-            await session.fetch_by_sid(sid)
-            if not await session.is_expired():
+            session = await Session.fetch_by_sid(sid)
+            if not session.is_expired:
                 await session.refresh()
-                user = User(self.mongo)
-                req.ctx.user = await user.fetch_by_sid(sid)
+                req.ctx.user = await session.get_user()
                 req.ctx.session = session
             else:
                 await session.logout()
-                req.ctx.user = None
-                req.ctx.session = None
                 return json_res({"error": "session id not existing", "status": 401}, status=401)
-        else:
-            req.ctx.user = None
-            req.ctx.session = None
 
     def start(self) -> None:
         """

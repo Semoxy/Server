@@ -30,7 +30,7 @@ class ServerManager:
         fetches all servers and adds them to its server list
         """
         self.servers = []
-        async for server in self.mc.mongo["server"].find({}):
+        async for server in self.mc.database["server"].find({}):
             s = MinecraftServer(self.mc, server)
             if s.status == 2:  # if the server was online, start it
                 await s.start()
@@ -46,7 +46,7 @@ class ServerManager:
         :param port: the port to check
         :return: whether there is a server running or not
         """
-        res = await self.mc.mongo["server"].find_one({"port": port, "onlineStatus": {"$ne": 0}})
+        res = await self.mc.database["server"].find_one({"port": port, "onlineStatus": {"$ne": 0}})
         return res is not None
 
     async def get_ids(self):
@@ -89,14 +89,14 @@ class ServerManager:
         # remove server files
         shutil.rmtree(server.run_dir, ignore_errors=False)
         # Remove server document
-        await self.mc.mongo["server"].delete_one({"_id": server.id})
+        await self.mc.database["server"].delete_one({"_id": server.id})
 
         # send packet before unregistering, otherwise we couldn't broadcast to the ws clients of the server console
         await ServerDeletionPacket(server.id).send(self)
         self.servers.remove(server)
 
         # Remove all lastServer references
-        await self.mc.mongo["user"].update_many({"lastServer": server.id}, {"$set": {"lastServer": None}})
+        await self.mc.database["user"].update_many({"lastServer": server.id}, {"$set": {"lastServer": None}})
 
     async def create_server(self, name, version_provider, major_version, minor_version, ram, port, java_version):
         """
@@ -154,7 +154,7 @@ class ServerManager:
 
         # insert into db
         doc = {"name": name, "allocatedRAM": ram, "dataDir": dir_, "jarFile": "server.jar", "onlineStatus": 0, "software": {"server": version_provider.NAME, "majorVersion": major_version, "minorVersion": minor_version, "minecraftVersion": await version_provider.get_minecraft_version(major_version, minor_version)}, "displayName": display_name, "port": port, "addons": [], "javaVersion": java_version}
-        insert_result = await self.mc.mongo["server"].insert_one(doc)
+        insert_result = await self.mc.database["server"].insert_one(doc)
         doc["_id"] = insert_result.inserted_id
 
         # add server record to db and register to server manager
@@ -164,7 +164,7 @@ class ServerManager:
         try:
             await version_provider.post_download(dir_, major_version, minor_version)
         except Exception as e:
-            await self.mc.mongo["server"].delete_one({"_id": insert_result.inserted_id})
+            await self.mc.database["server"].delete_one({"_id": insert_result.inserted_id})
             return json_res({"error": "Error during Server Creation", "description": " ".join(e.args), "status": 500}, status=500)
 
         await ServerCreationPacket(s).send(self)
@@ -176,7 +176,7 @@ class ServerManager:
         checks whether there is no server with the specified name
         :param name: the name to check
         """
-        return await self.mc.mongo["server"].find_one({"name": name}) is None
+        return await self.mc.database["server"].find_one({"name": name}) is None
 
     @staticmethod
     async def save_eula(path):

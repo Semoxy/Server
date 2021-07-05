@@ -4,7 +4,7 @@ import time
 from bson.objectid import ObjectId
 from sanic.blueprints import Blueprint
 
-from ..auth import User
+from ..models import User
 from ..io.config import Config
 from ..util import json_res, requires_post_params, requires_login, catch_keyerrors
 
@@ -18,13 +18,11 @@ async def login_post(req):
     """
     post endpoint for logging in a user
     """
-    user = User(req.app.mongo)
-    user = await user.fetch_by_name(req.json["username"])
+    user = await User.fetch_by_name(req.json["username"])
     if user:
-        if await user.check_password(req.app.password_hasher, str(req.json["password"]), req.app.pepper):
-            sess_id = await user.login()
-            resp = json_res({"success": "logged in successfully", "data": {"sessionId": sess_id}})
-            return resp
+        if await user.check_password(str(req.json["password"])):
+            session = await user.create_session()
+            return json_res({"success": "logged in successfully", "data": {"sessionId": session.sid}})
     return json_res({"error": "Wrong Credentials", "status": 401, "description": "either username or password are wrong"}, status=401)
 
 
@@ -47,7 +45,7 @@ async def check_session(req):
     out = {"loggedIn": req.ctx.session is not None}
     if req.ctx.session:
         out["expiration"] = req.ctx.session.expiration
-        out["userId"] = req.ctx.session.user_id
+        out["userId"] = req.ctx.session.userId
     return json_res(out)
 
 
@@ -67,7 +65,7 @@ async def fetch_me(req):
     """
     sends information about the current user to the client
     """
-    return json_res({"username": req.ctx.user.name, "permissions": req.ctx.user.perms})
+    return json_res({"username": req.ctx.user.name, "permissions": req.ctx.user.permissions})
 
 
 @account_blueprint.post("/ticket")
@@ -86,15 +84,15 @@ async def open_ticket(req):
             return json_res({"error": "Invalid Server Id", "description": "the server id you entered is either no valid bson ObjectId or does not match a server", "status": 400}, status=400)
         # save ObjectId string from request as ObjectId in mongo
         data["serverId"] = ObjectId(data["serverId"])
-    rec = await req.app.mongo["wsticket"].find_one({"userId": user.id, "endpoint": {"type": type_, "data": data}})
+    rec = await req.app.database["wsticket"].find_one({"userId": user.id, "endpoint": {"type": type_, "data": data}})
     if rec and rec["expiration"] >= time.time():
         del rec["_id"]
         return json_res(rec)
     elif rec:
-        await req.app.mongo["wsticket"].delete_one({"_id": rec["_id"]})
-    ticket = await get_new_ticket(req.app.mongo)
+        await req.app.database["wsticket"].delete_one({"_id": rec["_id"]})
+    ticket = await get_new_ticket(req.app.database)
     doc = {"ticket": ticket, "userId": user.id, "endpoint": {"type": type_, "data": data}, "expiration": int(time.time() + Config.SESSION_EXPIRATION)}
-    await req.app.mongo["wsticket"].insert_one(doc)
+    await req.app.database["wsticket"].insert_one(doc)
     del doc["_id"]
     return json_res(doc)
 

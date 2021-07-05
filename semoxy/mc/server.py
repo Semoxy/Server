@@ -50,7 +50,7 @@ class MinecraftServer:
         """
         refetches the current server from the database
         """
-        record = await self.mc.mongo["server"].find_one({"_id": self.id})
+        record = await self.mc.database["server"].find_one({"_id": self.id})
         if not record:
             return await self.mc.server_manager.remove_server(self.id)
         self.name = record["name"]
@@ -66,7 +66,7 @@ class MinecraftServer:
 
     async def update(self, data):
         await StateChangePacket(**data).send(self.connections)
-        await self.mc.mongo["server"].update_one({"_id": self.id}, {"$set": data})
+        await self.mc.database["server"].update_one({"_id": self.id}, {"$set": data})
 
     async def set_online_status(self, status) -> None:
         """
@@ -77,7 +77,7 @@ class MinecraftServer:
         3 - stopping
         :param status: the server status to update
         """
-        await self.mc.mongo["server"].update_one({"_id": self.id}, {"$set": {"onlineStatus": status}})
+        await self.mc.database["server"].update_one({"_id": self.id}, {"$set": {"onlineStatus": status}})
         await StateChangePacket(onlineStatus=status).send(self.connections)
         self.status = status
 
@@ -186,7 +186,7 @@ class MinecraftServer:
         res = await (await self.get_version_provider()).add_addon(addon_id, addon_type, addon_version, self.run_dir)
         if res:
             await AddonUpdatePacket(AddonUpdatePacket.Mode.ADD, res).send(self.connections)
-            await self.mc.mongo["server"].update_one({"_id": self.id}, {"$addToSet": {"addons": res}})
+            await self.mc.database["server"].update_one({"_id": self.id}, {"$addToSet": {"addons": res}})
         return res
 
     async def remove_addon(self, addon_id):
@@ -202,7 +202,7 @@ class MinecraftServer:
             if ad["id"] != addon_id:
                 new_addon_list.append(ad)
         await AddonUpdatePacket(AddonUpdatePacket.Mode.REMOVE, addon).send(self.connections)
-        self.mc.mongo["server"].update_one({"_id": self.id}, {"$set": {"addons": new_addon_list}})
+        self.mc.database["server"].update_one({"_id": self.id}, {"$set": {"addons": new_addon_list}})
         return True
 
     async def get_installed_addon(self, addon_id):

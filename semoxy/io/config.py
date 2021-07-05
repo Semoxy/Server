@@ -1,12 +1,17 @@
+from __future__ import annotations
+
 import json
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from ..sanicserver import Semoxy
 
 
 class Config:
     """
     static class for managing configurations
     """
-
-    MCWEB_INSTANCE = None
+    SEMOXY_INSTANCE: Semoxy = None
 
     ATTR_KEYS = {
         "DB_PATH": ("dbPath", "data.db"),
@@ -37,7 +42,7 @@ class Config:
         """
         loads the config file and stores it's values as class attributes
         """
-        Config.MCWEB_INSTANCE = mcweb
+        Config.SEMOXY_INSTANCE = mcweb
         config_secret = Config.get_docker_secret("config")
         if config_secret:
             data = json.loads(config_secret)
@@ -63,7 +68,7 @@ class Config:
         return {
             "javaVersions": java_versions,
             "maxRam": Config.MAX_RAM,
-            "publicIP": Config.MCWEB_INSTANCE.public_ip
+            "publicIP": Config.SEMOXY_INSTANCE.public_ip
         }
 
     @staticmethod
