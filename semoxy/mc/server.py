@@ -9,13 +9,14 @@ from ..io.regexes import Regexes
 from ..io.wsmanager import WebsocketConnectionManager
 from ..io.wspackets import StateChangePacket, ConsoleMessagePacket, AddonUpdatePacket
 from ..mc.communication import ServerCommunication
+from ..models.server import ServerData
 
 
 class MinecraftServer:
     """
     class for representing a single minecraft server
     """
-    __slots__ = "mc", "connections", "id", "name", "display_name", "ram", "run_dir", "jar", "status", "software", "port", "addons", "java_version", "communication", "output", "files_to_remove", "_stop_event"
+    __slots__ = "connections", "communication", "output", "files_to_remove", "_stop_event", "data"
 
     CHANGEABLE_FIELDS = {
         "displayName": lambda x: Regexes.SERVER_DISPLAY_NAME.match(x),
@@ -24,49 +25,31 @@ class MinecraftServer:
         "javaVersion": lambda x: x in Config.JAVA["installations"].keys()
     }
 
-    def __init__(self, mc, record):
-        self.mc = mc
+    def __init__(self, data: ServerData):
+        self.data: ServerData = data
         self.connections = WebsocketConnectionManager()
-        self.id = record["_id"]
-        self.name = record["name"]
-        self.display_name = record["displayName"]
-        self.ram = record["allocatedRAM"]
-        self.run_dir = record["dataDir"]
-        self.jar = record["jarFile"]
-        self.status = record["onlineStatus"]
-        self.software = record["software"]
-        self.port = record["port"]
-        self.addons = record["addons"]
-        self.java_version = record["javaVersion"]
         self.communication = None
         self.output = []
         self.files_to_remove = []
         self._stop_event = None
 
-    async def generate_command(self) -> str:
-        return f"{Config.JAVA['installations'][self.java_version]['path'] + Config.JAVA['installations'][self.java_version]['additionalArguments']} -Xmx{self.ram}G -jar {self.jar} --port {self.port}"
+    @classmethod
+    async def from_id(cls, _id: ServerData.ObjectId):
+        data = await ServerData.fetch_from_id(_id)
+        return MinecraftServer(data)
 
-    async def refetch(self) -> None:
-        """
-        refetches the current server from the database
-        """
-        record = await self.mc.database["server"].find_one({"_id": self.id})
-        if not record:
-            return await self.mc.server_manager.remove_server(self.id)
-        self.name = record["name"]
-        self.display_name = record["displayName"]
-        self.ram = record["allocatedRAM"]
-        self.run_dir = record["dataDir"]
-        self.jar = record["jarFile"]
-        self.status = record["onlineStatus"]
-        self.software = record["software"]
-        self.port = record["port"]
-        self.addons = record["addons"]
-        self.java_version = record["javaVersion"]
+    @property
+    def start_command(self) -> str:
+        return f"{Config.JAVA['installations'][self.data.javaVersion]['path'] + Config.JAVA['installations'][self.data.javaVersion]['additionalArguments']} -Xmx{self.data.allocatedRAM}G -jar {self.data.jarFile} --port {self.data.port}"
 
     async def update(self, data):
+        """
+        updates the server instance based on the specified document and broadcasts the change to the clients
+        :param data: the attributes to update
+        :return:
+        """
         await StateChangePacket(**data).send(self.connections)
-        await self.mc.database["server"].update_one({"_id": self.id}, {"$set": data})
+        await self.data.set_attributes(**data)
 
     async def set_online_status(self, status) -> None:
         """
@@ -77,9 +60,8 @@ class MinecraftServer:
         3 - stopping
         :param status: the server status to update
         """
-        await self.mc.database["server"].update_one({"_id": self.id}, {"$set": {"onlineStatus": status}})
+        await self.data.set_online_status(status)
         await StateChangePacket(onlineStatus=status).send(self.connections)
-        self.status = status
 
     @property
     def running(self) -> bool:
@@ -90,13 +72,17 @@ class MinecraftServer:
             return False
         return self.communication.running
 
+    @property
+    def loop(self):
+        return self.data.semoxy().loop
+
     async def start(self) -> None:
         """
         starts the server and updates it status
         check if server is not running before calling
         """
         # shell has to be True when running with docker
-        self.communication = ServerCommunication(self.mc.loop, await self.generate_command(), self.on_output, self.on_output, self.on_stop, cwd=self.run_dir, shell=Config.get_docker_secret("mongo_user") is not None)
+        self.communication = ServerCommunication(self.loop, self.start_command, self.on_output, self.on_output, self.on_stop, cwd=self.data.dataDir, shell=Config.get_docker_secret("mongo_user") is not None)
         self.output = []
         # Clear console on all clients
         await StateChangePacket(consoleOut=[]).send(self.connections)
@@ -114,7 +100,7 @@ class MinecraftServer:
         check if server is running before calling
         :return:
         """
-        if self.status == 0 or self.status == 3:
+        if self.data.onlineStatus in [0, 3]:
             return None
         await self.send_command("stop")
         self._stop_event = Event()
@@ -141,7 +127,7 @@ class MinecraftServer:
         :param line: the line that is printed
         """
         self.output.append(line)
-        if self.status == 1:
+        if self.data.onlineStatus == 1:
             if Regexes.DONE.match(line.strip()):
                 await self.set_online_status(2)
         await ConsoleMessagePacket(line).send(self.connections)
@@ -162,31 +148,20 @@ class MinecraftServer:
         :return: a json dict
         """
         return {
-            "id": str(self.id),
-            "name": self.name,
-            "allocatedRAM": self.ram,
-            "dataDir": self.run_dir,
-            "jarFile": self.jar,
-            "onlineStatus": self.status,
-            "displayName": self.display_name,
-            "software": self.software,
-            "port": self.port,
-            "supports": Config.VERSIONS[self.software["server"]]["supports"],
-            "addons": self.addons,
-            "javaVersion": self.java_version,
-            "consoleOut": self.output,
-            "full": True,
+            **self.data.json(),
+            "supports": Config.VERSIONS[self.data.software["server"]]["supports"],
+            "consoleOut": self.output
         }
 
     async def get_version_provider(self):
-        return await self.mc.server_manager.versions.provider_by_name(self.software["server"])
+        return await self.data.semoxy().server_manager.versions.provider_by_name(self.data.software["server"])
 
     async def add_addon(self, addon_id, addon_type, addon_version):
         await self.remove_addon(addon_id)
-        res = await (await self.get_version_provider()).add_addon(addon_id, addon_type, addon_version, self.run_dir)
+        res = await (await self.get_version_provider()).add_addon(addon_id, addon_type, addon_version, self.data.dataDir)
         if res:
             await AddonUpdatePacket(AddonUpdatePacket.Mode.ADD, res).send(self.connections)
-            await self.mc.database["server"].update_one({"_id": self.id}, {"$addToSet": {"addons": res}})
+            await self.data.semoxy().database["server"].update_one({"_id": self.data.id}, {"$addToSet": {"addons": res}})
         return res
 
     async def remove_addon(self, addon_id):
@@ -198,34 +173,27 @@ class MinecraftServer:
         else:
             os.remove(addon["filePath"])
         new_addon_list = []
-        for ad in self.addons:
+        for ad in self.data.addons:
             if ad["id"] != addon_id:
                 new_addon_list.append(ad)
         await AddonUpdatePacket(AddonUpdatePacket.Mode.REMOVE, addon).send(self.connections)
-        self.mc.database["server"].update_one({"_id": self.id}, {"$set": {"addons": new_addon_list}})
+        self.data.semoxy().database["server"].update_one({"_id": self.data.id}, {"$set": {"addons": new_addon_list}})
         return True
 
     async def get_installed_addon(self, addon_id):
-        for ad in self.addons:
+        for ad in self.data.addons:
             if ad["id"] == addon_id:
                 return ad
         return None
 
     async def supports(self, addon_type):
-        return Config.VERSIONS[self.software["server"]]["supports"][addon_type]
+        return Config.VERSIONS[self.data.software["server"]]["supports"][addon_type]
 
     async def pack_addons(self, f):
         zipf = zipfile.ZipFile(f, "w")
-        for addon in self.addons:
-            zipf.write(addon["filePath"], os.path.relpath(addon["filePath"], self.run_dir))
+        for addon in self.data.addons:
+            zipf.write(addon["filePath"], os.path.relpath(addon["filePath"], self.data.dataDir))
         zipf.close()
 
-    def light_json(self):
-        return {
-            "id": str(self.id),
-            "displayName": self.display_name,
-            "full": False
-        }
-
     async def delete(self):
-        await self.mc.server_manager.delete_server(self)
+        await self.data.semoxy().server_manager.delete_server(self)

@@ -103,13 +103,15 @@ class Semoxy(Sanic):
         req.ctx.user = None
         if sid:
             session = await Session.fetch_by_sid(sid)
+            if not session:
+                return json_res({"error": "session id not existing", "status": 401}, status=401)
             if not session.is_expired:
                 await session.refresh()
                 req.ctx.user = await session.get_user()
                 req.ctx.session = session
             else:
                 await session.logout()
-                return json_res({"error": "session id not existing", "status": 401}, status=401)
+                return json_res({"error": "session expired", "status": 401}, status=401)
 
     def start(self) -> None:
         """

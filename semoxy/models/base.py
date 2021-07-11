@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import secrets
-from typing import Optional, Set, TYPE_CHECKING
+from typing import Optional, Set, TYPE_CHECKING, Dict
 
 from bson.objectid import ObjectId
 from motor.core import AgnosticCollection
@@ -15,9 +15,9 @@ class Model:
     """
     base class for mongodb database models
     """
-    __collection__: str = "invalid"
+    __collection__: str = "<invalid>"
     __slots__ = "_id",
-    _slots = set()
+    _slots: Dict[object, Set[str]] = {}
 
     ObjectId = ObjectId
 
@@ -29,17 +29,13 @@ class Model:
         """
         gets all attributes of this class
         """
-        if not cls._slots:
+        if cls not in cls._slots.keys():
+            cls._slots[cls] = set()
             for cs in [getattr(c, "__slots__", []) for c in cls.__mro__]:
                 for s in cs:
-                    cls._slots.add(s)
-            cls._slots.remove("_id")
-        return cls._slots
-
-    def update(self, doc: dict):
-        for k, v in doc.items():
-            assert k in self.slots()
-            setattr(self, k, v)
+                    cls._slots[cls].add(s)
+            cls._slots[cls].remove("_id")
+        return cls._slots[cls]
 
     @classmethod
     def collection(cls) -> AgnosticCollection:
@@ -71,7 +67,10 @@ class Model:
         if missing:
             raise ValueError(f"invalid attributes: {missing}")
         await self.collection().update_one({"_id": self._id}, {"$set": kwargs})
-        self.update(kwargs)
+
+        # update attributes of this Model instance
+        for k, v in kwargs.items():
+            setattr(self, k, v)
 
     @classmethod
     def semoxy(cls) -> Semoxy:
@@ -114,6 +113,26 @@ class Model:
             sid = secrets.token_urlsafe(length)
             do = bool(await cls.collection().find_one({key: sid}))
         return sid
+
+    def json(self, include_id=True):
+        """
+        returns a json representation of this model instance as dict
+        :param include_id: whether the ObjectId should be included in the output
+        :return: a json representation of this model instance
+        """
+        out = {slot: getattr(self, slot) for slot in self.slots()}
+
+        if include_id:
+            out["id"] = self.id
+
+        return out
+
+    @property
+    def id(self):
+        """
+        the ObjectId of this model instance
+        """
+        return self._id
 
     def __str__(self):
         return f"<{self.__class__.__name__} {' '.join([f'{s}={getattr(self, s)}' for s in self.slots()])}>"

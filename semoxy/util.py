@@ -4,6 +4,7 @@ import sys
 from typing import Union, Tuple
 
 from .models import WebsocketTicket
+from .models.auth import BrowserMetrics
 
 if sys.version_info.minor < 7:
     from async_generator import asynccontextmanager
@@ -27,7 +28,14 @@ def json_res(di: Union[dict, list], **kwargs) -> HTTPResponse:
     adds indent to the output json
     :return: the created sanic.response.HTTPResponse
     """
-    return json(objid_to_str(di), dumps=lambda s: json_dumps(s, indent=2), **kwargs)
+    return json(di, dumps=lambda s: json_dumps(s, default=_handle_unserializable_value), **kwargs)
+
+
+def _handle_unserializable_value(v):
+    # translate ObjectIds
+    if isinstance(v, ObjectId):
+        return str(v)
+    raise ValueError("value can't be serialized: " + str(v))
 
 
 def get_path(url) -> Tuple[Union[bytes, str], Union[bytes, str]]:
@@ -52,29 +60,6 @@ async def download_and_save(url: str, path: str) -> bool:
     raise FileNotFoundError("file couldn't be saved")
 
 
-def objid_to_str(d: Union[dict, list]) -> Union[dict, list]:
-    """
-    converts all object id objects in a json response to str
-    :param d: element to convert
-    :return: converted  dict
-    """
-    if isinstance(d, dict):
-        out = {}
-        for k, v in d.items():
-            if isinstance(v, dict):
-                v = objid_to_str(v)
-            elif isinstance(v, ObjectId):
-                v = str(v)
-            out[k] = v
-        return out
-    elif isinstance(d, list):
-        out = []
-        for l in d:
-            out.append(objid_to_str(l))
-        return out
-    return d
-
-
 def server_endpoint():
     """
     marks an api endpoint as a server endpoint
@@ -91,7 +76,7 @@ def server_endpoint():
             server = await req.app.server_manager.get_server(i)
             if server is None:
                 return json_res({"error": "Not Found", "status": 404, "description": "no server was found for your id"}, status=404)
-            await server.refetch()
+
             req.ctx.server = server
             return await f(req, *args, **kwargs)
         return decorated_function

@@ -31,10 +31,10 @@ class ServerManager:
         """
         self.servers = []
         async for server in self.mc.database["server"].find({}):
-            s = MinecraftServer(self.mc, server)
-            if s.status == 2:  # if the server was online, start it
+            s = await MinecraftServer.from_id(server["_id"])
+            if s.data.onlineStatus == 2:  # if the server was online, start it
                 await s.start()
-            elif s.status != 0:
+            elif s.data.onlineStatus != 0:
                 await s.set_online_status(0)
             self.servers.append(s)
 
@@ -61,7 +61,7 @@ class ServerManager:
         :param i: the id of the server
         """
         for server in self.servers:
-            if str(server.id) == i:
+            if str(server.data.id) == i:
                 return server
         return None
 

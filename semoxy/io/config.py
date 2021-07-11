@@ -4,7 +4,7 @@ import json
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..sanicserver import Semoxy
+    from ..server import Semoxy
 
 
 class Config:
