@@ -4,10 +4,12 @@ from asyncio import Event
 from time import strftime
 from typing import Any, Dict, Optional
 
+from bson.objectid import ObjectId
+
+from .versions.base import VersionProvider
 from ..io.config import Config
 from ..io.regexes import Regexes
-from ..io.wsmanager import WebsocketConnectionManager
-from ..io.wspackets import StateChangePacket, ConsoleMessagePacket, AddonUpdatePacket
+from ..io.wspackets import ServerStateChangePacket, ConsoleLinePacket
 from ..mc.communication import ServerCommunication
 from ..models.server import ServerData
 
@@ -16,7 +18,7 @@ class MinecraftServer:
     """
     class for representing a single minecraft server
     """
-    __slots__ = "connections", "communication", "output", "files_to_remove", "_stop_event", "data"
+    __slots__ = "communication", "output", "files_to_remove", "_stop_event", "data"
 
     CHANGEABLE_FIELDS = {
         "displayName": lambda x: Regexes.SERVER_DISPLAY_NAME.match(x),
@@ -27,7 +29,6 @@ class MinecraftServer:
 
     def __init__(self, data: ServerData):
         self.data: ServerData = data
-        self.connections = WebsocketConnectionManager()
         self.communication = None
         self.output = []
         self.files_to_remove = []
@@ -35,20 +36,39 @@ class MinecraftServer:
 
     @classmethod
     async def from_id(cls, _id: ServerData.ObjectId):
+        """
+        fetches a MinecraftServer by its id
+        """
         data = await ServerData.fetch_from_id(_id)
         return MinecraftServer(data)
 
     @property
     def start_command(self) -> str:
+        """
+        the command that is used to start the server
+        """
         return f"{Config.JAVA['installations'][self.data.javaVersion]['path'] + Config.JAVA['installations'][self.data.javaVersion]['additionalArguments']} -Xmx{self.data.allocatedRAM}G -jar {self.data.jarFile} --port {self.data.port}"
+
+    @property
+    def connections(self):
+        """
+        all connected clients
+        """
+        return self.data.semoxy().server_manager.connections
+
+    @property
+    def id(self) -> ObjectId:
+        """
+        the id of this server
+        """
+        return self.data.id
 
     async def update(self, data):
         """
         updates the server instance based on the specified document and broadcasts the change to the clients
         :param data: the attributes to update
-        :return:
         """
-        await StateChangePacket(**data).send(self.connections)
+        await ServerStateChangePacket(self.id, **data).send(self.connections)
         await self.data.set_attributes(**data)
 
     async def set_online_status(self, status) -> None:
@@ -61,12 +81,12 @@ class MinecraftServer:
         :param status: the server status to update
         """
         await self.data.set_online_status(status)
-        await StateChangePacket(onlineStatus=status).send(self.connections)
+        await ServerStateChangePacket(self.id, onlineStatus=status).send(self.connections)
 
     @property
     def running(self) -> bool:
         """
-        whether the server process is running or not.
+        whether the server process is running or not
         """
         if not self.communication:
             return False
@@ -74,6 +94,9 @@ class MinecraftServer:
 
     @property
     def loop(self):
+        """
+        the sanic server loop
+        """
         return self.data.semoxy().loop
 
     async def start(self) -> None:
@@ -85,20 +108,19 @@ class MinecraftServer:
         self.communication = ServerCommunication(self.loop, self.start_command, self.on_output, self.on_output, self.on_stop, cwd=self.data.dataDir, shell=Config.get_docker_secret("mongo_user") is not None)
         self.output = []
         # Clear console on all clients
-        await StateChangePacket(consoleOut=[]).send(self.connections)
+        await ServerStateChangePacket(self.id, consoleOut=[]).send(self.connections)
         await self.set_online_status(1)
         try:
             await self.communication.begin()
         except Exception as e:
             print("Couldn't find Start Command")
-            await ConsoleMessagePacket("Error: " + str(e)).send(self.connections)
+            await ConsoleLinePacket(self.id, "Error: " + str(e)).send(self.connections)
             await self.set_online_status(0)
 
     async def stop(self) -> Optional[Event]:
         """
         stops the server
-        check if server is running before calling
-        :return:
+        :return: asyncio.Event if the server is stopping now, otherwise None
         """
         if self.data.onlineStatus in [0, 3]:
             return None
@@ -113,33 +135,48 @@ class MinecraftServer:
         """
         self.communication.running = False
         await self.set_online_status(0)
+
         for f in self.files_to_remove:
             os.remove(f)
         self.files_to_remove = []
+
         if self._stop_event is not None:
             self._stop_event.set()
             self._stop_event = None
 
-    async def on_output(self, line) -> None:
+    async def on_output(self, line: str) -> None:
         """
         called when the server prints a new line to its stdout
         used to check for patterns and broadcasting to the connected websockets
         :param line: the line that is printed
         """
         self.output.append(line)
+
         if self.data.onlineStatus == 1:
+            # update online status when started
             if Regexes.DONE.match(line.strip()):
                 await self.set_online_status(2)
-        await ConsoleMessagePacket(line).send(self.connections)
 
-    async def send_command(self, cmd) -> None:
+        await ConsoleLinePacket(self.id, line).send(self.connections)
+
+    async def put_console_message(self, msg: str):
+        """
+        appends a new line to the server output and broadcasts it to the clients
+        :param msg: the message to put
+        """
+        self.output.append(msg)
+        await ConsoleLinePacket(self.id, msg).send(self.connections)
+
+    async def send_command(self, cmd: str) -> None:
         """
         prints a command to the server stdin and flushes it
         :param cmd: the command to print
         """
-        await ConsoleMessagePacket(f"[{strftime('%H:%M:%S')} MCWEB CONSOLE COMMAND]: {cmd}").send(self.connections)
+        await self.put_console_message(f"[{strftime('%H:%M:%S')} SEMOXY CONSOLE COMMAND]: " + cmd)
+
         if cmd.startswith("stop"):
             await self.set_online_status(3)
+
         await self.communication.write_stdin(cmd)
 
     def json(self) -> Dict[str, Any]:
@@ -153,9 +190,26 @@ class MinecraftServer:
             "consoleOut": self.output
         }
 
-    async def get_version_provider(self):
+    async def get_version_provider(self) -> VersionProvider:
+        """
+        gets the version provider of this server
+        :return: the version provider
+        """
         return await self.data.semoxy().server_manager.versions.provider_by_name(self.data.software["server"])
 
+    async def delete(self):
+        """
+        deletes this server
+        """
+        await self.data.semoxy().server_manager.delete_server(self)
+
+    async def supports(self, addon_type: str) -> bool:
+        """
+        checks if the server supports the specified type of addon
+        """
+        return Config.VERSIONS[self.data.software["server"]]["supports"][addon_type]
+
+    # TODO: addon stuff
     async def add_addon(self, addon_id, addon_type, addon_version):
         await self.remove_addon(addon_id)
         res = await (await self.get_version_provider()).add_addon(addon_id, addon_type, addon_version, self.data.dataDir)
@@ -186,14 +240,8 @@ class MinecraftServer:
                 return ad
         return None
 
-    async def supports(self, addon_type):
-        return Config.VERSIONS[self.data.software["server"]]["supports"][addon_type]
-
     async def pack_addons(self, f):
         zipf = zipfile.ZipFile(f, "w")
         for addon in self.data.addons:
             zipf.write(addon["filePath"], os.path.relpath(addon["filePath"], self.data.dataDir))
         zipf.close()
-
-    async def delete(self):
-        await self.data.semoxy().server_manager.delete_server(self)

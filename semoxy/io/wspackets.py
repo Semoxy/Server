@@ -1,86 +1,73 @@
+from __future__ import annotations
+
 import json
-from typing import Any, Dict
+from typing import Any, Dict, TYPE_CHECKING
+
+from bson.objectid import ObjectId
+
+from ..util import serialize_objectids
+
+if TYPE_CHECKING:
+    from ..mc.server import MinecraftServer
 
 
-class ServerWebSocketPacket:
-    PACKET_TYPE = "NullPacket"
+class BasePacket:
+    ACTION = "NULL"
 
     def __init__(self):
         self.json: Dict[str, Any] = {
-            "packetType": self.PACKET_TYPE
+            "action": self.ACTION,
+            "data": {}
         }
+
+    @property
+    def data(self):
+        return self.json["data"]
 
     async def send(self, ws):
-        await ws.send(json.dumps(self.json))
+        await ws.send(json.dumps(self.json, default=serialize_objectids))
 
 
-class ConsoleConnectedPacket(ServerWebSocketPacket):
-    PACKET_TYPE = "ConsoleConnectedPacket"
+class ServerStateChangePacket(BasePacket):
+    ACTION = "SERVER_STATE_CHANGE"
+
+    def __init__(self, server_id: ObjectId, **patch):
+        super(ServerStateChangePacket, self).__init__()
+        self.data["id"] = server_id
+        self.data["patch"] = patch
 
 
-class StateChangePacket(ServerWebSocketPacket):
-    PACKET_TYPE = "StateChangePacket"
+class ConsoleLinePacket(BasePacket):
+    ACTION = "CONSOLE_LINE"
 
-    def __init__(self, **kwargs):
-        super(StateChangePacket, self).__init__()
-        self.json["update"] = {
-            "server": kwargs
-        }
-
-
-class ConsoleMessagePacket(ServerWebSocketPacket):
-    PACKET_TYPE = "ConsoleMessagePacket"
-
-    def __init__(self, msg):
-        super(ConsoleMessagePacket, self).__init__()
-        self.json["data"] = {
-            "message": msg
-        }
+    def __init__(self, server_id: ObjectId, message: str):
+        super(ConsoleLinePacket, self).__init__()
+        self.data["id"] = server_id
+        self.data["message"] = message
 
 
-class ConsoleInfoPacket(ConsoleMessagePacket):
-    PACKET_TYPE = "ConsoleInfoPacket"
+class MetaMessagePacket(BasePacket):
+    ACTION = "META_MESSAGE"
+
+    def __init__(self, message: str):
+        super(MetaMessagePacket, self).__init__()
+        self.data["message"] = message
 
 
-class ServerCreationPacket(ServerWebSocketPacket):
-    PACKET_TYPE = "ServerCreationPacket"
+class ServerAddPacket(BasePacket):
+    ACTION = "SERVER_ADD"
 
-    def __init__(self, mcserver):
-        super(ServerCreationPacket, self).__init__()
-        self.json["data"] = {
-            "server": mcserver.json()
-        }
+    def __init__(self, server: MinecraftServer):
+        super(ServerAddPacket, self).__init__()
+        self.json["data"] = server.json()
 
 
-class AddonUpdatePacket(ServerWebSocketPacket):
-    PACKET_TYPE = "AddonUpdatePacket"
-
-    class Mode:
-        ADD = "add"
-        REMOVE = "remove"
-
-    def __init__(self, mode, addon_data):
-        super(AddonUpdatePacket, self).__init__()
-        self.json["type"] = mode
-        self.json["data"] = addon_data
+# TODO: implement addon packets
 
 
-class PermissionErrorPacket(ServerWebSocketPacket):
-    PACKET_TYPE = "PermissionErrorPacket"
+class ServerDeletePacket(BasePacket):
+    ACTION = "SERVER_DELETE"
 
-    def __init__(self, error, description):
-        super(PermissionErrorPacket, self).__init__()
-        self.json["data"] = {
-            "error": error,
-            "description": description
-        }
-
-
-class ServerDeletionPacket(ServerWebSocketPacket):
-    PACKET_TYPE = "ServerDeletionPacket"
-
-    def __init__(self, server_id):
-        super(ServerDeletionPacket, self).__init__()
-        self.json["data"] = {
-            "id": str(server_id)
-        }
+    def __init__(self, server_id: ObjectId):
+        super(ServerDeletePacket, self).__init__()
+        self.data["id"] = server_id

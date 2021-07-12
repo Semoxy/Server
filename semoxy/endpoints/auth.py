@@ -1,11 +1,9 @@
-import secrets
-
 from sanic.blueprints import Blueprint
 from sanic.request import Request
 
 from ..models import User
 from ..models import WebsocketTicket
-from ..util import json_res, requires_post_params, requires_login
+from ..util import json_response, requires_post_params, requires_login
 
 account_blueprint = Blueprint("account", url_prefix="account")
 
@@ -21,19 +19,8 @@ async def login_post(req):
     if user:
         if await user.check_password(str(req.json["password"])):
             session = await user.create_session()
-            return json_res({"success": "logged in successfully", "data": {"sessionId": session.sid}})
-    return json_res({"error": "Wrong Credentials", "status": 401, "description": "either username or password are wrong"}, status=401)
-
-
-@account_blueprint.get("/login")
-async def login_get(req):
-    """
-    endpoint to redirect on wrong login
-    """
-    if not req.ctx.session:
-        return json_res({"error": "Not Logged In", "status": 401, "description": "please login using POST to /account/login"}, status=401)
-    else:
-        return json_res({"info": "you are already logged in", "status": 200})
+            return json_response({"success": "logged in successfully", "data": {"sessionId": session.sid}})
+    return json_response({"error": "Wrong Credentials", "status": 401, "description": "either username or password are wrong"}, status=401)
 
 
 @account_blueprint.get("/session")
@@ -45,7 +32,7 @@ async def check_session(req):
     if req.ctx.session:
         out["expiration"] = req.ctx.session.expiration
         out["userId"] = req.ctx.session.userId
-    return json_res(out)
+    return json_response(out)
 
 
 @account_blueprint.get("/logout")
@@ -55,7 +42,7 @@ async def logout(req):
     get endpoint for logging out a user
     """
     await req.ctx.session.logout()
-    return json_res({"success": "logged out successfully", "data": {}})
+    return json_response({"success": "logged out successfully", "data": {}})
 
 
 @account_blueprint.get("/")
@@ -64,18 +51,14 @@ async def fetch_me(req):
     """
     sends information about the current user to the client
     """
-    return json_res({"username": req.ctx.user.name, "permissions": req.ctx.user.permissions})
+    return json_response({"username": req.ctx.user.name, "permissions": req.ctx.user.permissions})
 
 
 @account_blueprint.get("/ticket")
 @requires_login()
 async def open_ticket(req: Request):
+    """
+    opens a new ticket based on the current session
+    """
     ticket: WebsocketTicket = await req.ctx.user.create_ticket(req.ip, req.headers["User-Agent"] or "unknown agent")
-    return json_res({"success": "ticket created", "data": {"token": ticket.token}})
-
-
-async def get_new_ticket(db):
-    ticket = secrets.token_urlsafe(24)
-    while await db["wsticket"].find_one({"ticket": ticket}):
-        ticket = secrets.token_urlsafe(24)
-    return ticket
+    return json_response({"success": "ticket created", "data": {"token": ticket.token}})

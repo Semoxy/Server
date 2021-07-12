@@ -5,8 +5,8 @@ class ServerData(Model):
     """
     represents the data of a minecraft server
     """
-    __slots__ = "name", "allocatedRAM", "dataDir", "jarFile", "onlineStatus", "software", "displayName",\
-                "port", "addons", "javaVersion"
+    __slots__ = "name", "allocatedRAM", "dataDir", "jarFile", "onlineStatus",\
+                "software", "displayName", "port", "addons", "javaVersion"
     __collection__ = "server"
 
     def __init__(self, doc: dict):

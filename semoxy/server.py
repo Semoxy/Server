@@ -17,7 +17,7 @@ from .io.mongo import MongoClient
 from .io.regexes import Regexes
 from .mc.servermanager import ServerManager
 from .models import Session
-from .util import json_res
+from .util import json_response
 
 
 class Semoxy(Sanic):
@@ -48,6 +48,10 @@ class Semoxy(Sanic):
         self.register_middleware(self.set_session_middleware, "request")
 
     async def after_server_stop(self, app, loop):
+        """
+        called when sanic has shutdown
+        shuts down all minecraft servers
+        """
         await self.server_manager.shutdown_all()
 
     @staticmethod
@@ -64,7 +68,6 @@ class Semoxy(Sanic):
     async def reload_ip(self):
         """
         reloads the public IP of the Semoxy instance host
-        :return:
         """
         if Config.STATIC_IP:
             ip = Config.STATIC_IP
@@ -75,13 +78,15 @@ class Semoxy(Sanic):
         self.public_ip = await Semoxy.check_ip(ip)
 
     async def before_server_start(self, app, loop):
+        """
+        initialises mongo and reloads when the server starts
+        """
         self.database = MongoClient(loop).semoxy_db
         await self.reload()
 
     async def reload(self):
         """
         reloads the Semoxy instance, the public IP and deletes expired sessions
-        :return:
         """
         await self.reload_ip()
         try:
@@ -98,20 +103,21 @@ class Semoxy(Sanic):
         """
         middleware that fetches and sets the session on the request object
         """
+        req.ctx.semoxy = self
         sid = req.token
         req.ctx.session = None
         req.ctx.user = None
         if sid:
             session = await Session.fetch_by_sid(sid)
             if not session:
-                return json_res({"error": "session id not existing", "status": 401}, status=401)
+                return json_response({"error": "session id not existing", "status": 401}, status=401)
             if not session.is_expired:
                 await session.refresh()
                 req.ctx.user = await session.get_user()
                 req.ctx.session = session
             else:
                 await session.logout()
-                return json_res({"error": "session expired", "status": 401}, status=401)
+                return json_response({"error": "session expired", "status": 401}, status=401)
 
     def start(self) -> None:
         """
@@ -119,4 +125,5 @@ class Semoxy(Sanic):
         """
         if not os.path.isdir(os.path.join(os.getcwd(), "servers")):
             os.mkdir(os.path.join(os.getcwd(), "servers"))
+
         self.run(host=os.getenv("BACKEND_HOST") or "localhost", port=os.getenv("BACKEND_PORT") or 5001)

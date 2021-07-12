@@ -1,7 +1,17 @@
 import os
 import shutil
 import sys
+from functools import wraps
+from json import dumps as json_dumps
+from os.path import split as split_path
 from typing import Union, Tuple
+from urllib.parse import urlparse
+
+import aiofiles
+import aiohttp
+from bson.objectid import ObjectId
+from sanic.request import Request
+from sanic.response import json, HTTPResponse
 
 from .models import WebsocketTicket
 from .models.auth import BrowserMetrics
@@ -10,28 +20,22 @@ if sys.version_info.minor < 7:
     from async_generator import asynccontextmanager
 else:
     from contextlib import asynccontextmanager
-from functools import wraps
-from json import dumps as json_dumps
-from os.path import split as split_path
-from urllib.parse import urlparse
-
-import aiofiles
-import aiohttp
-from bson.objectid import ObjectId
-from sanic.response import json, redirect, HTTPResponse
-from sanic.request import Request
 
 
-def json_res(di: Union[dict, list], **kwargs) -> HTTPResponse:
+def json_response(di: Union[dict, list], **kwargs) -> HTTPResponse:
     """
-    straight wrapper for sanic.response.json
-    adds indent to the output json
+    generates a json response based on a dict
+    translates ObjectIds to str
     :return: the created sanic.response.HTTPResponse
     """
-    return json(di, dumps=lambda s: json_dumps(s, default=_handle_unserializable_value), **kwargs)
+    return json(di, dumps=lambda s: json_dumps(s, default=serialize_objectids), **kwargs)
 
 
-def _handle_unserializable_value(v):
+def serialize_objectids(v):
+    """
+    stringifies ObjectIds
+    function to be passed to json.dumps as default
+    """
     # translate ObjectIds
     if isinstance(v, ObjectId):
         return str(v)
@@ -39,8 +43,10 @@ def _handle_unserializable_value(v):
 
 
 def get_path(url) -> Tuple[Union[bytes, str], Union[bytes, str]]:
-    u = urlparse(url)
-    return split_path(u.path)
+    """
+    extracts and splits the path of a url
+    """
+    return split_path(urlparse(url).path)
 
 
 async def download_and_save(url: str, path: str) -> bool:
@@ -48,7 +54,7 @@ async def download_and_save(url: str, path: str) -> bool:
     downloads a file and saves it to the given path
     :param url: the url to download
     :param path: the path of the output file
-    :return: True, if the server was created successfully
+    :return: True, if the file was saved successfully
     """
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
@@ -71,11 +77,11 @@ def server_endpoint():
         @wraps(f)
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             if "i" not in kwargs.keys():
-                return json_res({"error": "KeyError", "status": 400, "description": "please specify the server id"}, status=404)
+                return json_response({"error": "KeyError", "status": 400, "description": "please specify the server id"}, status=404)
             i = kwargs["i"]
             server = await req.app.server_manager.get_server(i)
             if server is None:
-                return json_res({"error": "Not Found", "status": 404, "description": "no server was found for your id"}, status=404)
+                return json_response({"error": "Not Found", "status": 404, "description": "no server was found for your id"}, status=404)
 
             req.ctx.server = server
             return await f(req, *args, **kwargs)
@@ -93,8 +99,8 @@ def requires_server_online(online: bool = True):
         @wraps(f)
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             if online != req.ctx.server.running:
-                return json_res({"error": "Invalid State", "status": 423, "description": "this endpoint requires the server to be " + ("online" if online else "offline")},
-                                status=423)
+                return json_response({"error": "Invalid State", "status": 423, "description": "this endpoint requires the server to be " + ("online" if online else "offline")},
+                                     status=423)
             return await f(req, *args, **kwargs)
         return decorated_function
     return decorator
@@ -110,7 +116,7 @@ def requires_post_params(*json_keys: str):
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             for prop in json_keys:
                 if prop not in req.json.keys():
-                    return json_res({"error": "KeyError", "status": 400, "description": "you need to specify " + prop, "missingField": prop}, status=404)
+                    return json_response({"error": "KeyError", "status": 400, "description": "you need to specify " + prop, "missingField": prop}, status=404)
             return await f(req, *args, **kwargs)
         return decorated_function
     return decorator
@@ -125,17 +131,19 @@ def requires_login(logged_in: bool = True):
         @wraps(f)
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             if logged_in and not req.ctx.user:
-                return redirect("/account/login")
+                return json_response({"error": "Not Logged In", "status": 401,
+                                      "description": "you need to be logged in to use this"},
+                                     status=401)
             if not logged_in and req.ctx.user:
-                return json_res({"error": "Logged In", "status": 401,
-                                 "description": "you need to be logged out to use this"},
-                                status=401)
+                return json_response({"error": "Logged In", "status": 401,
+                                      "description": "you need to be logged out to use this"},
+                                     status=401)
             return await f(req, *args, **kwargs)
         return decorated_function
     return decorator
 
 
-def console_ws():
+def requires_ticket():
     """
     verifies tickets for the console websocket endpoint
     """
@@ -144,22 +152,22 @@ def console_ws():
         async def decorated_function(req, *args, **kwargs):
             ticket_token = req.args.get("ticket")
             if not ticket_token:
-                return json_res({"error": "No Ticket Provided", "status": 401, "description": "open a ticket using /account/ticket"}, status=401)
+                return json_response({"error": "No Ticket Provided", "status": 401, "description": "open a ticket using /account/ticket"}, status=401)
 
             ticket = await WebsocketTicket.fetch_from_token(ticket_token)
 
             if ticket.is_expired:
                 await ticket.delete()
-                return json_res({"error": "Ticket expired", "status": 401, "description": "please open a new ticket"}, status=401)
+                return json_response({"error": "Ticket expired", "status": 401, "description": "please open a new ticket"}, status=401)
 
             if BrowserMetrics(req).hash != ticket.browserMetrics:
                 await ticket.delete()
-                return json_res({"error": "Access error", "status": 400, "description": "we couldn't verify your browser"}, status=400)
+                return json_response({"error": "Access error", "status": 400, "description": "we couldn't verify your browser"}, status=400)
 
             req.ctx.user = await ticket.get_user()
             if not req.ctx.user:
                 await ticket.delete()
-                return json_res({"error": "Invalid Ticket", "status": 401, "description": "open a ticket using /account/ticket"}, status=401)
+                return json_response({"error": "Invalid Ticket", "status": 401, "description": "open a ticket using /account/ticket"}, status=401)
 
             req.ctx.ticket = ticket
 
@@ -178,7 +186,7 @@ def catch_keyerrors():
             try:
                 return await f(req, *args, **kwargs)
             except KeyError as e:
-                return json_res({"error": "KeyError", "description": str(e)})
+                return json_response({"error": "KeyError", "description": "there was an error, check your payload"})
         return decorated_function
     return decorator
 
