@@ -40,6 +40,10 @@ class MinecraftServer:
         fetches a MinecraftServer by its id
         """
         data = await ServerData.fetch_from_id(_id)
+
+        if not data:
+            return None
+
         return MinecraftServer(data)
 
     @property

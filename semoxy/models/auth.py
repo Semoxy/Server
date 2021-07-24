@@ -36,7 +36,7 @@ class User(Model):
         return await cls.fetch(name=name)
 
     @classmethod
-    async def fetch_by_id(cls, _id: str) -> Optional[User]:
+    async def fetch_by_id(cls, _id: Model.ObjectId) -> Optional[User]:
         """
         fetches a user with the specified id
         :param _id: the id to get the user of
@@ -98,18 +98,6 @@ class User(Model):
         """
         return await Session.new(sid=await Session.get_unused_token("sid"), expiration=int(time.time() + Config.SESSION_EXPIRATION), userId=self._id)
 
-    async def create_ticket(self, req: Request) -> WebsocketTicket:
-        """
-        creates a new websocket ticket with the user
-        :param req: the request object for calculating BrowserMetrics
-        :return: a new WebsocketTicket
-        """
-        token = WebsocketTicket.get_unused_token("token")
-        metrics = BrowserMetrics(req).hash
-
-        ticket = await WebsocketTicket.new(token=token, userId=self._id, expiration=int(time.time() + Config.SESSION_EXPIRATION), browserMetrics=metrics)
-        return ticket
-
 
 class Session(Model):
     """
@@ -158,39 +146,6 @@ class Session(Model):
         refreshes the expiration of this session
         """
         await self.set_attributes(expiration=int(time.time() + Config.SESSION_EXPIRATION))
-
-
-class WebsocketTicket(Model):
-    """
-    represents a ticket that can be used to connect to the websocket endpoint
-    """
-    __slots__ = "token", "userId", "expiration", "browserMetrics"
-    __collection__ = "ticket"
-
-    def __init__(self, doc: dict):
-        super(WebsocketTicket, self).__init__(doc)
-        self.token: str = doc["token"]
-        self.userId: Model.ObjectId = doc["userId"]
-        self.expiration: int = doc["expiration"]
-        self.browserMetrics: str = doc["browserMetrics"]
-
-    @classmethod
-    async def fetch_from_token(cls, token: str) -> Optional[WebsocketTicket]:
-        """
-        fetches a ticket with the specified token
-        :return: the WebsocketTicket or None if none found
-        """
-        return await cls.fetch(token=token)
-
-    async def get_user(self) -> Optional[User]:
-        return await User.fetch_by_id(self.userId)
-
-    @property
-    def is_expired(self):
-        """
-        whether this session is expired or not
-        """
-        return self.expiration < time.time()
 
 
 class BrowserMetrics:

@@ -1,13 +1,16 @@
+import json
+
 from sanic.blueprints import Blueprint
 from sanic.response import file
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, ConnectionClosedOK
 
-from ..io.wspackets import MetaMessagePacket
+from ..io.wspackets import MetaMessagePacket, AuthenticationErrorPacket, BasePacket, AuthenticationSuccessPacket
 from ..mc.server import MinecraftServer
 from ..mc.versions.base import VersionProvider
 from ..util import TempDir
 from ..util import server_endpoint, requires_server_online, json_response, requires_post_params, requires_login, \
-    requires_ticket, catch_keyerrors
+    catch_keyerrors
+from ..models.auth import Session
 
 server_blueprint = Blueprint("server", url_prefix="server")
 
@@ -46,19 +49,49 @@ async def start_server(req, i):
     return json_response({"success": "server started", "update": {"server": {"online_status": 1}}})
 
 
+class SocketError(Exception):
+    def __init__(self, packet: BasePacket):
+        self.packet: BasePacket = packet
+
+
 @server_blueprint.websocket("/events")
-@requires_ticket()
 async def console_websocket(req, ws):
     """
     websocket endpoints for console output and server state change
     """
-    await req.ctx.semoxy.server_manager.connections.connected(ws, req.ctx.user)
     try:
         while True:
-            await ws.recv()
-            await MetaMessagePacket("Don't send messages via websocket, use http endpoints instead").send(ws)
-    except ConnectionClosed:
-        await req.ctx.semoxy.server_manager.connections.disconnected(ws)
+            packet = json.loads(await ws.recv())
+
+            if packet["action"] == "AUTHENTICATE":
+                session = await Session.fetch_by_sid(str(packet["data"]["sessionId"]))
+
+                if not session:
+                    raise SocketError(AuthenticationErrorPacket("invalid session"))
+
+                if session.is_expired:
+                    await session.delete()
+                    raise SocketError(AuthenticationErrorPacket("session expired"))
+
+                user = await session.get_user()
+                await req.ctx.semoxy.server_manager.connections.connected(ws, user)
+
+                await AuthenticationSuccessPacket().send(ws)
+            else:
+                await MetaMessagePacket("unsupported action").send(ws)
+
+    except SocketError as err:
+        await err.packet.send(ws)
+        await ws.close()
+
+    except (json.JSONDecodeError, KeyError):
+        await MetaMessagePacket("malformed packet").send(ws)
+        await ws.close()
+
+    except (ConnectionClosed, ConnectionClosedOK):
+        pass
+
+    await req.ctx.semoxy.server_manager.connections.disconnected(ws)
 
 
 @server_blueprint.post("/<i:string>/command")

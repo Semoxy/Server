@@ -1,8 +1,6 @@
 from sanic.blueprints import Blueprint
-from sanic.request import Request
 
 from ..models import User
-from ..models import WebsocketTicket
 from ..util import json_response, requires_post_params, requires_login
 
 account_blueprint = Blueprint("account", url_prefix="account")
@@ -52,13 +50,3 @@ async def fetch_me(req):
     sends information about the current user to the client
     """
     return json_response({"username": req.ctx.user.name, "permissions": req.ctx.user.permissions})
-
-
-@account_blueprint.get("/ticket")
-@requires_login()
-async def open_ticket(req: Request):
-    """
-    opens a new ticket based on the current session
-    """
-    ticket: WebsocketTicket = await req.ctx.user.create_ticket(req.ip, req.headers["User-Agent"] or "unknown agent")
-    return json_response({"success": "ticket created", "data": {"token": ticket.token}})

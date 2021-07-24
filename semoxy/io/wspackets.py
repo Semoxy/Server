@@ -71,3 +71,11 @@ class ServerDeletePacket(BasePacket):
     def __init__(self, server_id: ObjectId):
         super(ServerDeletePacket, self).__init__()
         self.data["id"] = server_id
+
+
+class AuthenticationErrorPacket(MetaMessagePacket):
+    ACTION = "AUTH_ERROR"
+
+
+class AuthenticationSuccessPacket(BasePacket):
+    ACTION = "AUTH_SUCCESS"

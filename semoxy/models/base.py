@@ -92,6 +92,7 @@ class Model:
         if missing:
             raise ValueError(f"missing attributes: {missing}")
 
+        # NOTE: adds the _id property to the kwargs dict
         await cls.collection().insert_one(kwargs)
         return cls(kwargs)
 

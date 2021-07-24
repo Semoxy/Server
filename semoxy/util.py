@@ -13,8 +13,6 @@ from bson.objectid import ObjectId
 from sanic.request import Request
 from sanic.response import json, HTTPResponse
 
-from .models import WebsocketTicket
-from .models.auth import BrowserMetrics
 
 if sys.version_info.minor < 7:
     from async_generator import asynccontextmanager
@@ -143,39 +141,6 @@ def requires_login(logged_in: bool = True):
     return decorator
 
 
-def requires_ticket():
-    """
-    verifies tickets for the console websocket endpoint
-    """
-    def decorator(f):
-        @wraps(f)
-        async def decorated_function(req, *args, **kwargs):
-            ticket_token = req.args.get("ticket")
-            if not ticket_token:
-                return json_response({"error": "No Ticket Provided", "status": 401, "description": "open a ticket using /account/ticket"}, status=401)
-
-            ticket = await WebsocketTicket.fetch_from_token(ticket_token)
-
-            if ticket.is_expired:
-                await ticket.delete()
-                return json_response({"error": "Ticket expired", "status": 401, "description": "please open a new ticket"}, status=401)
-
-            if BrowserMetrics(req).hash != ticket.browserMetrics:
-                await ticket.delete()
-                return json_response({"error": "Access error", "status": 400, "description": "we couldn't verify your browser"}, status=400)
-
-            req.ctx.user = await ticket.get_user()
-            if not req.ctx.user:
-                await ticket.delete()
-                return json_response({"error": "Invalid Ticket", "status": 401, "description": "open a ticket using /account/ticket"}, status=401)
-
-            req.ctx.ticket = ticket
-
-            return await f(req, *args, **kwargs)
-        return decorated_function
-    return decorator
-
-
 def catch_keyerrors():
     """
     catches all KeyErrors in the decorated route and cancels request
@@ -185,7 +150,7 @@ def catch_keyerrors():
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             try:
                 return await f(req, *args, **kwargs)
-            except KeyError as e:
+            except KeyError:
                 return json_response({"error": "KeyError", "description": "there was an error, check your payload"})
         return decorated_function
     return decorator
