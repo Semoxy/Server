@@ -1,2 +1,2 @@
 # Server
-The backend code for Semoxx
+The backend code for Semoxy
