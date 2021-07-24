@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -36,12 +37,14 @@ class Config:
     JAVA = {}
     PEPPER = ""
     STATIC_IP = ""
+    START_TIME: int = 0
 
     @staticmethod
     def load(mcweb) -> None:
         """
         loads the config file and stores it's values as class attributes
         """
+        Config.START_TIME = int(time.time())
         Config.SEMOXY_INSTANCE = mcweb
         config_secret = Config.get_docker_secret("config")
         if config_secret:
@@ -68,7 +71,8 @@ class Config:
         return {
             "javaVersions": java_versions,
             "maxRam": Config.MAX_RAM,
-            "publicIP": Config.SEMOXY_INSTANCE.public_ip
+            "publicIP": Config.SEMOXY_INSTANCE.public_ip,
+            "startTime": Config.START_TIME
         }
 
     @staticmethod
