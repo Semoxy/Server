@@ -1,3 +1,5 @@
+from typing import Optional
+
 from .base import Model
 
 
@@ -6,7 +8,7 @@ class ServerData(Model):
     represents the data of a minecraft server
     """
     __slots__ = "name", "allocatedRAM", "dataDir", "jarFile", "onlineStatus",\
-                "software", "displayName", "port", "addons", "javaVersion"
+                "software", "displayName", "port", "addons", "javaVersion", "description"
     __collection__ = "server"
 
     def __init__(self, doc: dict):
@@ -21,6 +23,7 @@ class ServerData(Model):
         self.port: int = doc["port"]
         self.addons: list = doc["addons"]
         self.javaVersion: str = doc["javaVersion"]
+        self.description: Optional[str] = doc.get("description", None)
 
     @classmethod
     async def fetch_from_id(cls, _id: Model.ObjectId):

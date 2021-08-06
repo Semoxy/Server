@@ -93,7 +93,7 @@ class ServerManager:
         await ServerDeletePacket(server.id).send(self)
         self.servers.remove(server)
 
-    async def create_server(self, name: str, version_provider: VersionProvider, major_version: str, minor_version: str, ram: int, port: int, java_version: str):
+    async def create_server(self, name: str, version_provider: VersionProvider, major_version: str, minor_version: str, ram: int, port: int, java_version: str, description: Optional[str]):
         """
         creates a new server
         :param name: the new servers name
@@ -162,7 +162,8 @@ class ServerManager:
             displayName=display_name,
             port=port,
             addons=[],
-            javaVersion=java_version
+            javaVersion=java_version,
+            description=str(description) if description is not None else None
         )
 
         s = await MinecraftServer.from_id(data.id)

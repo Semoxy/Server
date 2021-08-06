@@ -176,11 +176,12 @@ async def create_server(req, server, major_version, minor_version):
     :param minor_version: minor version
     """
     ram = req.json.get("allocatedRAM") or 2
-    java_version = req.json.get("javaVersion") or "default"
+    java_version = req.json.get("javaVersion", "default")
+    description = req.json.get("description", None)
     name = req.json["name"]
     port = req.json["port"]
     version_provider: VersionProvider = await req.app.server_manager.versions.provider_by_name(server)
-    return await req.app.server_manager.create_server(name, version_provider, major_version, minor_version, ram, port, java_version)
+    return await req.app.server_manager.create_server(name, version_provider, major_version, minor_version, ram, port, java_version, description)
 
 
 @server_blueprint.get("/versions")
