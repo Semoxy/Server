@@ -1,1 +1,1 @@
-from .sanicserver import Semoxy
+from .server import Semoxy

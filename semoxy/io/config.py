@@ -1,12 +1,18 @@
+from __future__ import annotations
+
 import json
+import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..server import Semoxy
 
 
 class Config:
     """
     static class for managing configurations
     """
-
-    MCWEB_INSTANCE = None
+    SEMOXY_INSTANCE: Semoxy = None
 
     ATTR_KEYS = {
         "DB_PATH": ("dbPath", "data.db"),
@@ -31,13 +37,15 @@ class Config:
     JAVA = {}
     PEPPER = ""
     STATIC_IP = ""
+    START_TIME: int = 0
 
     @staticmethod
     def load(mcweb) -> None:
         """
         loads the config file and stores it's values as class attributes
         """
-        Config.MCWEB_INSTANCE = mcweb
+        Config.START_TIME = int(time.time())
+        Config.SEMOXY_INSTANCE = mcweb
         config_secret = Config.get_docker_secret("config")
         if config_secret:
             data = json.loads(config_secret)
@@ -63,7 +71,8 @@ class Config:
         return {
             "javaVersions": java_versions,
             "maxRam": Config.MAX_RAM,
-            "publicIP": Config.MCWEB_INSTANCE.public_ip
+            "publicIP": Config.SEMOXY_INSTANCE.public_ip,
+            "startTime": Config.START_TIME
         }
 
     @staticmethod
