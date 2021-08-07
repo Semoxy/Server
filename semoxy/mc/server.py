@@ -24,7 +24,8 @@ class MinecraftServer:
         "displayName": lambda x: Regexes.SERVER_DISPLAY_NAME.match(x),
         "port": lambda x: isinstance(x, int) and 25000 < x < 30000,
         "allocatedRAM": lambda x: isinstance(x, int) and x <= Config.MAX_RAM,
-        "javaVersion": lambda x: x in Config.JAVA["installations"].keys()
+        "javaVersion": lambda x: x in Config.JAVA["installations"].keys(),
+        "description": lambda x: isinstance(x, str)
     }
 
     def __init__(self, data: ServerData):
@@ -51,7 +52,7 @@ class MinecraftServer:
         """
         the command that is used to start the server
         """
-        return f"{Config.JAVA['installations'][self.data.javaVersion]['path'] + Config.JAVA['installations'][self.data.javaVersion]['additionalArguments']} -Xmx{self.data.allocatedRAM}G -jar {self.data.jarFile} --port {self.data.port}"
+        return f"\"{Config.JAVA['installations'][self.data.javaVersion]['path']}\"{Config.JAVA['installations'][self.data.javaVersion]['additionalArguments']} -Xmx{self.data.allocatedRAM}G -jar {self.data.jarFile} --port {self.data.port}"
 
     @property
     def connections(self):
@@ -117,6 +118,8 @@ class MinecraftServer:
         try:
             await self.communication.begin()
         except Exception as e:
+            print(self.data.dataDir)
+            print(self.start_command)
             print("Couldn't find Start Command")
             await ConsoleLinePacket(self.id, "Error: " + str(e)).send(self.connections)
             await self.set_online_status(0)
@@ -160,7 +163,6 @@ class MinecraftServer:
             # update online status when started
             if Regexes.DONE.match(line.strip()):
                 await self.set_online_status(2)
-
         await ConsoleLinePacket(self.id, line).send(self.connections)
 
     async def put_console_message(self, msg: str):

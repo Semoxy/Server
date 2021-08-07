@@ -5,7 +5,7 @@ from ..models.auth import User
 
 class WebsocketConnectionManager:
     """
-    class for managing all websocket connections to a MinecraftServer
+    class for managing all websocket connections this semoxy instance
     """
     def __init__(self):
         self.connections = []

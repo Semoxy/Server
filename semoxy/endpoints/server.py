@@ -43,7 +43,7 @@ async def start_server(req, i):
     """
     endpoints for starting the specified server
     """
-    if await req.app.server_manager.server_running_on(port=req.ctx.server.port):
+    if await req.app.server_manager.server_running_on(port=req.ctx.server.data.port):
         return json_response({"error": "Port Unavailable", "description": "there is already a server running on that port", "status": 423}, status=423)
     await req.ctx.server.start()
     return json_response({"success": "server started", "update": {"server": {"online_status": 1}}})
@@ -160,7 +160,6 @@ async def update_server(req, i):
         out[k] = v
 
     await req.ctx.server.update(out)
-    await req.ctx.server.refetch()
     return json_response({"success": "Updated Server", "update": {"server": req.ctx.server.json()}})
 
 
