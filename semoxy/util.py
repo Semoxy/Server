@@ -1,39 +1,50 @@
 import os
 import shutil
-import time
 import sys
-from typing import Union, Tuple, List
-
-if sys.version_info.minor < 7:
-    from async_generator import asynccontextmanager
-else:
-    from contextlib import asynccontextmanager
 from functools import wraps
 from json import dumps as json_dumps
 from os.path import split as split_path
+from typing import Union, Tuple
 from urllib.parse import urlparse
 
 import aiofiles
 import aiohttp
 from bson.objectid import ObjectId
-from sanic.response import json, redirect, HTTPResponse
 from sanic.request import Request
+from sanic.response import json, HTTPResponse
 
-from .auth import User
+
+if sys.version_info.minor < 7:
+    from async_generator import asynccontextmanager
+else:
+    from contextlib import asynccontextmanager
 
 
-def json_res(di: Union[dict, list], **kwargs) -> HTTPResponse:
+def json_response(di: Union[dict, list], **kwargs) -> HTTPResponse:
     """
-    straight wrapper for sanic.response.json
-    adds indent to the output json
+    generates a json response based on a dict
+    translates ObjectIds to str
     :return: the created sanic.response.HTTPResponse
     """
-    return json(objid_to_str(di), dumps=lambda s: json_dumps(s, indent=2), **kwargs)
+    return json(di, dumps=lambda s: json_dumps(s, default=serialize_objectids), **kwargs)
+
+
+def serialize_objectids(v):
+    """
+    stringifies ObjectIds
+    function to be passed to json.dumps as default
+    """
+    # translate ObjectIds
+    if isinstance(v, ObjectId):
+        return str(v)
+    raise ValueError("value can't be serialized: " + str(v))
 
 
 def get_path(url) -> Tuple[Union[bytes, str], Union[bytes, str]]:
-    u = urlparse(url)
-    return split_path(u.path)
+    """
+    extracts and splits the path of a url
+    """
+    return split_path(urlparse(url).path)
 
 
 async def download_and_save(url: str, path: str) -> bool:
@@ -41,7 +52,7 @@ async def download_and_save(url: str, path: str) -> bool:
     downloads a file and saves it to the given path
     :param url: the url to download
     :param path: the path of the output file
-    :return: True, if the server was created successfully
+    :return: True, if the file was saved successfully
     """
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
@@ -51,29 +62,6 @@ async def download_and_save(url: str, path: str) -> bool:
                 await f.close()
                 return True
     raise FileNotFoundError("file couldn't be saved")
-
-
-def objid_to_str(d: Union[dict, list]) -> Union[dict, list]:
-    """
-    converts all object id objects in a json response to str
-    :param d: element to convert
-    :return: converted  dict
-    """
-    if isinstance(d, dict):
-        out = {}
-        for k, v in d.items():
-            if isinstance(v, dict):
-                v = objid_to_str(v)
-            elif isinstance(v, ObjectId):
-                v = str(v)
-            out[k] = v
-        return out
-    elif isinstance(d, list):
-        out = []
-        for l in d:
-            out.append(objid_to_str(l))
-        return out
-    return d
 
 
 def server_endpoint():
@@ -87,12 +75,12 @@ def server_endpoint():
         @wraps(f)
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             if "i" not in kwargs.keys():
-                return json_res({"error": "KeyError", "status": 400, "description": "please specify the server id"}, status=404)
+                return json_response({"error": "KeyError", "status": 400, "description": "please specify the server id"}, status=404)
             i = kwargs["i"]
             server = await req.app.server_manager.get_server(i)
             if server is None:
-                return json_res({"error": "Not Found", "status": 404, "description": "no server was found for your id"}, status=404)
-            await server.refetch()
+                return json_response({"error": "Not Found", "status": 404, "description": "no server was found for your id"}, status=404)
+
             req.ctx.server = server
             return await f(req, *args, **kwargs)
         return decorated_function
@@ -109,8 +97,8 @@ def requires_server_online(online: bool = True):
         @wraps(f)
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             if online != req.ctx.server.running:
-                return json_res({"error": "Invalid State", "status": 423, "description": "this endpoint requires the server to be " + ("online" if online else "offline")},
-                                status=423)
+                return json_response({"error": "Invalid State", "status": 423, "description": "this endpoint requires the server to be " + ("online" if online else "offline")},
+                                     status=423)
             return await f(req, *args, **kwargs)
         return decorated_function
     return decorator
@@ -126,7 +114,7 @@ def requires_post_params(*json_keys: str):
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             for prop in json_keys:
                 if prop not in req.json.keys():
-                    return json_res({"error": "KeyError", "status": 400, "description": "you need to specify " + prop, "missingField": prop}, status=404)
+                    return json_response({"error": "KeyError", "status": 400, "description": "you need to specify " + prop, "missingField": prop}, status=404)
             return await f(req, *args, **kwargs)
         return decorated_function
     return decorator
@@ -141,60 +129,29 @@ def requires_login(logged_in: bool = True):
         @wraps(f)
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             if logged_in and not req.ctx.user:
-                return redirect("/account/login")
+                return json_response({"error": "Not Logged In", "status": 401,
+                                      "description": "you need to be logged in to use this"},
+                                     status=401)
             if not logged_in and req.ctx.user:
-                return json_res({"error": "Logged In", "status": 401,
-                                 "description": "you need to be logged out to use this"},
-                                status=401)
+                return json_response({"error": "Logged In", "status": 401,
+                                      "description": "you need to be logged out to use this"},
+                                     status=401)
             return await f(req, *args, **kwargs)
-        return decorated_function
-    return decorator
-
-
-def console_ws():
-    """
-    verifies tickets for the console websocket endpoint
-    """
-    def decorator(f):
-        @wraps(f)
-        async def decorated_function(req, *args, **kwargs):
-            if "ticket" not in req.args.keys():
-                return json_res({"error": "No Ticket Provided", "status": 401, "description": "open a ticket using /account/ticket<endpoint>"}, status=401)
-            t = req.args.get("ticket")
-            user = User(req.app.mongo)
-            req.ctx.user = await user.fetch_by_ticket(t)
-            if not req.ctx.user:
-                return json_res({"error": "Invalid Ticket", "status": 401,
-                                 "description": "open a ticket using post /account/ticket"}, status=401)
-            rec = await req.app.mongo["wsticket"].find_one({"ticket": t})
-            if not rec:
-                return json_res({"error": "Invalid Ticket", "status": 401,
-                                 "description": "open a ticket using /account/ticket/<endpoint>"}, status=401)
-            if rec["expiration"] < time.time():
-                return json_res({"error": "Ticket expired", "status": 401, "description": "open a new ticket using /account/ticket/<endpoint>"}, status=401)
-            req.ctx.ticket = rec
-            server = req.ctx.server
-            endpoint = rec["endpoint"]
-            if endpoint["type"] == "server.console" and endpoint["data"]["serverId"] != server.id:
-                return json_res({"error": "Invalid Ticket", "status": 401, "description": "the ticket you provided is not opened for this server"})
-            await req.app.mongo["wsticket"].delete_one({"_id": rec["_id"]})
-            response = await f(req, *args, **kwargs)
-            return response
         return decorated_function
     return decorator
 
 
 def catch_keyerrors():
     """
-    catches all keyerrors in the decorated route and cancels request
+    catches all KeyErrors in the decorated route and cancels request
     """
     def decorator(f):
         @wraps(f)
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             try:
                 return await f(req, *args, **kwargs)
-            except KeyError as e:
-                return json_res({"error": "KeyError", "description": str(e)})
+            except KeyError:
+                return json_response({"error": "KeyError", "description": "there was an error, check your payload"})
         return decorated_function
     return decorator
 

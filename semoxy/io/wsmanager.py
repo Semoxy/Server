@@ -1,23 +1,22 @@
-import time
-
 from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
-from ..io.wspackets import PermissionErrorPacket
+from ..models.auth import User
 
 
 class WebsocketConnectionManager:
     """
-    class for managing all websocket connections to a MinecraftServer
+    class for managing all websocket connections this semoxy instance
     """
     def __init__(self):
         self.connections = []
 
-    async def connected(self, ws, ticket, user):
+    async def connected(self, ws, user: User):
         """
         registers a websocket to the manager
         :param ws: the websocket to register
+        :param user: the user that belongs to the request
         """
-        self.connections.append(WebSocketConnection(ws, ticket, user))
+        self.connections.append(WebSocketConnection(ws, user))
 
     async def disconnected(self, ws):
         """
@@ -26,10 +25,10 @@ class WebsocketConnectionManager:
         """
         if isinstance(ws, WebSocketConnection):
             self.connections.remove(ws)
-        else:
-            for conn in self.connections:
-                if conn.ws == ws:
-                    self.connections.remove(conn)
+            return
+        for conn in self.connections:
+            if conn.ws == ws:
+                self.connections.remove(conn)
 
     async def broadcast(self, msg):
         """
@@ -51,16 +50,14 @@ class WebsocketConnectionManager:
 
 
 class WebSocketConnection:
-    def __init__(self, ws, ticket, user):
+    """
+    represents a connection to a client
+    """
+    def __init__(self, ws, user: User):
         self.ws = ws
-        self.ticket = ticket
-        self.user = user
+        self.user: User = user
 
     async def send(self, msg):
-        if self.ticket["expiration"] < time.time():
-            await PermissionErrorPacket("Invalid Session", "your session is expired?").send(self.ws)
-            await self.ws.close()
-            return
         return await self.ws.send(msg)
 
     async def close(self):

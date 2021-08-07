@@ -1,3 +1,6 @@
+from typing import Optional
+
+from .base import VersionProvider
 from .forge import ForgeVersionProvider
 from .paper import PaperVersionProvider
 from .vanilla import SnapshotVersionProvider, VanillaVersionProvider
@@ -17,7 +20,7 @@ class VersionManager:
         for p in self.provider:
             await p.reload()
 
-    async def provider_by_name(self, s):
+    async def provider_by_name(self, s) -> Optional[VersionProvider]:
         for p in self.provider:
             if p.NAME == s:
                 return p
