@@ -1,6 +1,9 @@
+"""
+websocket session and broadcast management
+"""
 from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
-from ..models.auth import User
+from ..odm.auth import User
 
 
 class WebsocketConnectionManager:
@@ -32,8 +35,8 @@ class WebsocketConnectionManager:
 
     async def broadcast(self, msg):
         """
-        broadcasts a message to all connections
-        :param msg: the msg to broadcast
+        broadcasts a message to all connected clients
+        :param msg: the message to send
         """
         for ws in self.connections:
             try:
@@ -42,9 +45,16 @@ class WebsocketConnectionManager:
                 await self.disconnected(ws)
 
     async def send(self, msg):
+        """
+        broadcasts a message to all connected clients
+        :param msg: the message to send
+        """
         return await self.broadcast(msg)
 
     async def disconnect_all(self):
+        """
+        disconnects all connected clients
+        """
         for conn in self.connections:
             await conn.close()
 
@@ -58,7 +68,14 @@ class WebSocketConnection:
         self.user: User = user
 
     async def send(self, msg):
+        """
+        sends a message to the client
+        :param msg: the message to send
+        """
         return await self.ws.send(msg)
 
     async def close(self):
+        """
+        closes the websocket connection
+        """
         return await self.ws.close()

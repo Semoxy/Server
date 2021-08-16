@@ -1,9 +1,15 @@
+"""
+the partially minecraft protocol implementation
+"""
 import uuid
 from io import BytesIO
 from struct import pack, unpack
 
 
 class PacketBuilder:
+    """
+    base class for client bound packets
+    """
     def __init__(self, pack_id):
         self.id = pack_id
         self.bytes = bytes()
@@ -60,6 +66,9 @@ class PacketBuilder:
 
 
 class PacketBuffer(BytesIO):
+    """
+    base class for server bound packets
+    """
     def read_varint(self):
         bytes_read = 0
         result = 0
@@ -90,7 +99,13 @@ class PacketBuffer(BytesIO):
 
 
 class TextComponent:
+    """
+    utility class for minecraft json text components
+    """
     class Color:
+        """
+        color enum
+        """
         WHITE = "white"
         BLACK = "black"
         DARK_BLUE = "dark_blue"
@@ -110,6 +125,9 @@ class TextComponent:
         RESET = "reset"
 
     class Flag:
+        """
+        formatting flags
+        """
         BOLD = 0b00000001
         ITALIC = 0b00000010
         UNDERLINED = 0b00000100
@@ -117,6 +135,9 @@ class TextComponent:
         OBFUSCATED = 0b00010000
 
     class Builder:
+        """
+        builder class for text components
+        """
         def __init__(self, text=""):
             self._component = TextComponent()
             self._component.text = text

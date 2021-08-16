@@ -1,3 +1,6 @@
+"""
+version management
+"""
 from typing import Optional
 
 from .base import VersionProvider
@@ -7,6 +10,9 @@ from .vanilla import SnapshotVersionProvider, VanillaVersionProvider
 
 
 class VersionManager:
+    """
+    The version manager that keeps track of all version providers
+    """
     def __init__(self):
         # register version provider
         self.provider = [
@@ -17,16 +23,27 @@ class VersionManager:
         ]
 
     async def reload_all(self):
+        """
+        reloads all version providers
+        """
         for p in self.provider:
             await p.reload()
 
     async def provider_by_name(self, s) -> Optional[VersionProvider]:
+        """
+        searches for a version provider by its software name
+        :param s: the software name to search for
+        :return: the VersionProvider instance if found, else None
+        """
         for p in self.provider:
             if p.NAME == s:
                 return p
         return None
 
-    async def get_all_major_versions_json(self):
+    async def get_all_major_versions_json(self) -> dict:
+        """
+        bundles all softwares and their major versions into a json object
+        """
         out = {}
         for v in self.provider:
             out[v.NAME] = await v.get_major_versions()

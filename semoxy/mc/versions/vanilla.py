@@ -5,6 +5,9 @@ from ...io.config import Config
 
 
 class SnapshotVersionProvider(VersionProvider):
+    """
+    the version provider for vanilla snapshot servers
+    """
     NAME = "snapshot"
 
     def __init__(self):
@@ -42,6 +45,9 @@ class SnapshotVersionProvider(VersionProvider):
 
 
 class VanillaVersionProvider(SnapshotVersionProvider):
+    """
+    the version provider for vanilla servers
+    """
     NAME = "vanilla"
 
     async def reload(self):

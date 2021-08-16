@@ -1,3 +1,6 @@
+"""
+classes for managing a client connection
+"""
 import uuid
 from json import dumps as json_dumps
 from os import urandom

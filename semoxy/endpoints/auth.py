@@ -1,7 +1,12 @@
+"""
+authentication and user related endpoints
+"""
 from sanic.blueprints import Blueprint
 
-from ..models import User
+from ..odm.auth import User
+from ..io.config import Config
 from ..util import json_response, requires_post_params, requires_login
+
 
 account_blueprint = Blueprint("account", url_prefix="account")
 
@@ -13,10 +18,10 @@ async def login_post(req):
     """
     post endpoint for logging in a user
     """
-    user = await User.fetch_by_name(req.json["username"])
+    user = await Config.SEMOXY_INSTANCE.data.find_one(User, User.name == req.json["username"])
     if user:
         if await user.check_password(str(req.json["password"])):
-            session = await user.create_session()
+            session = await user.new_session()
             return json_response({"success": "logged in successfully", "data": {"sessionId": session.sid}})
     return json_response({"error": "Wrong Credentials", "status": 401, "description": "either username or password are wrong"}, status=401)
 
@@ -29,7 +34,7 @@ async def check_session(req):
     out = {"loggedIn": req.ctx.session is not None}
     if req.ctx.session:
         out["expiration"] = req.ctx.session.expiration
-        out["userId"] = req.ctx.session.userId
+        out["userId"] = req.ctx.session.user.id
     return json_response(out)
 
 
@@ -39,7 +44,7 @@ async def logout(req):
     """
     get endpoint for logging out a user
     """
-    await req.ctx.session.logout()
+    await req.ctx.session.delete()
     return json_response({"success": "logged out successfully", "data": {}})
 
 

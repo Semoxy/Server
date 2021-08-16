@@ -1,3 +1,6 @@
+"""
+a class for making config loading easier
+"""
 from __future__ import annotations
 
 import json

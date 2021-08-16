@@ -1,3 +1,6 @@
+"""
+misc endpoints that effect the entire semoxy instance
+"""
 from sanic.blueprints import Blueprint
 from sanic.response import HTTPResponse
 

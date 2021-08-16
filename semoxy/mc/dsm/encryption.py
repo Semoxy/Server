@@ -1,3 +1,6 @@
+"""
+encryption util functions
+"""
 import hashlib
 
 from Crypto.Cipher import AES

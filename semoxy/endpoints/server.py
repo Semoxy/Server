@@ -1,16 +1,17 @@
+"""
+all minecraft server related endpoints
+"""
 import json
 
 from sanic.blueprints import Blueprint
-from sanic.response import file
 from websockets.exceptions import ConnectionClosed, ConnectionClosedOK
 
+from ..io.config import Config
 from ..io.wspackets import MetaMessagePacket, AuthenticationErrorPacket, BasePacket, AuthenticationSuccessPacket
 from ..mc.server import MinecraftServer
 from ..mc.versions.base import VersionProvider
-from ..util import TempDir
-from ..util import server_endpoint, requires_server_online, json_response, requires_post_params, requires_login, \
-    catch_keyerrors
-from ..models.auth import Session
+from ..util import server_endpoint, requires_server_online, json_response, requires_post_params, requires_login
+from ..odm.auth import Session
 
 server_blueprint = Blueprint("server", url_prefix="server")
 
@@ -50,6 +51,9 @@ async def start_server(req, i):
 
 
 class SocketError(Exception):
+    """
+    exception type that makes it easier for us to disconnect the client with an error message
+    """
     def __init__(self, packet: BasePacket):
         self.packet: BasePacket = packet
 
@@ -64,7 +68,7 @@ async def console_websocket(req, ws):
             packet = json.loads(await ws.recv())
 
             if packet["action"] == "AUTHENTICATE":
-                session = await Session.fetch_by_sid(str(packet["data"]["sessionId"]))
+                session = await Config.SEMOXY_INSTANCE.data.find_one(Session, Session.sid == packet["data"]["sessionId"])
 
                 if not session:
                     raise SocketError(AuthenticationErrorPacket("invalid session"))
@@ -73,8 +77,7 @@ async def console_websocket(req, ws):
                     await session.delete()
                     raise SocketError(AuthenticationErrorPacket("session expired"))
 
-                user = await session.get_user()
-                await req.ctx.semoxy.server_manager.connections.connected(ws, user)
+                await req.ctx.semoxy.server_manager.connections.connected(ws, session.user)
 
                 await AuthenticationSuccessPacket().send(ws)
             else:
@@ -144,12 +147,22 @@ async def restart(req, i):
     await req.ctx.server.start()
     return json_response({"success": "Server Restarted"})
 
-
+"""
 # TODO: rethink the CHANGEABLE_FIELDS
 @server_blueprint.patch("/<i:string>")
 @requires_login()
 @server_endpoint()
 async def update_server(req, i):
+    ""
+    patch endpoint for updating server attributes
+    
+    "displayName": lambda x: Regexes.SERVER_DISPLAY_NAME.match(x),
+        "port": lambda x: isinstance(x, int) and 25000 < x < 30000,
+        "allocatedRAM": lambda x: isinstance(x, int) and x <= Config.MAX_RAM,
+        "javaVersion": lambda x: x in Config.JAVA["installations"].keys(),
+        "description": lambda x: isinstance(x, str)
+    
+    ""
     out = {}
 
     for k, v in req.json.items():
@@ -161,6 +174,7 @@ async def update_server(req, i):
 
     await req.ctx.server.update(out)
     return json_response({"success": "Updated Server", "update": {"server": req.ctx.server.json()}})
+"""
 
 
 @server_blueprint.put("/create/<server:string>/<major_version:string>/<minor_version:string>")
@@ -186,12 +200,18 @@ async def create_server(req, server, major_version, minor_version):
 @server_blueprint.get("/versions")
 @requires_login()
 async def get_all_versions(req):
+    """
+    endpoint for getting all major versions that can be installed on a minecraft server
+    """
     return json_response(await req.app.server_manager.versions.get_all_major_versions_json())
 
 
 @server_blueprint.get("/versions/<software:string>/<major_version:string>")
 @requires_login()
 async def get_minor_versions(req, software, major_version):
+    """
+    endpoint for getting all minor versions for a specific major version
+    """
     prov = await req.app.server_manager.versions.provider_by_name(software)
     if not prov:
         return json_response({"error": "Invalid Software", "description": "there is no server software with that name: " + str(software), "status": 400}, status=400)
@@ -202,10 +222,14 @@ async def get_minor_versions(req, software, major_version):
 @requires_login()
 @server_endpoint()
 async def delete_server(req, i):
+    """
+    deletes a server
+    """
     await req.ctx.server.delete()
     return json_response({"success": "Removed Server Successfully"})
 
 
+"""
 # TODO: check addon code
 @server_blueprint.put("/<i:string>/addons")
 @requires_login()
@@ -241,3 +265,4 @@ async def download_addons(req, i):
         f = tmp.use_file(name)
         await req.ctx.server.pack_addons(f)
         return await file(f, filename=name)
+"""
