@@ -1,8 +1,8 @@
 
 from typing import List
-from odmantic import Model, EmbeddedModel
+from odmantic import Model, EmbeddedModel, Field
 from pydantic import validator
-from ..io.config import Config
+from ..io.config import Config as SemoxyConfig
 from ..io.regexes import Regexes
 from . import SemoxyValidationError
 
@@ -26,13 +26,7 @@ class Server(Model):
         anystr_strip_whitespace = True
 
     async def save(self):
-        await Config.SEMOXY_INSTANCE.data.save(self)
-
-    @validator("allocatedRAM")
-    def check_max_ram(cls, v):
-        if v > Config.MAX_RAM:
-            raise SemoxyValidationError("allocatedRAM", f"the ram has to be smaller or equal to {Config.MAX_RAM}GB")
-        return v
+        await SemoxyConfig.SEMOXY_INSTANCE.data.save(self)
 
     @validator("name")
     def check_name(cls, v):
@@ -46,26 +40,20 @@ class Server(Model):
             raise SemoxyValidationError("displayName", "the displayName doesn't match the requirements")
         return v
 
-    @validator("port")
-    def check_port(cls, v):
-        if not (25000 < v < 30000):
-            raise SemoxyValidationError("port", "the port isn't in the port range 25000-30000")
-        return v
-
     @validator("javaVersion")
     def check_java_version(cls, v):
-        if v not in Config.JAVA["installations"].keys():
+        if v not in SemoxyConfig.JAVA["installations"].keys():
             raise SemoxyValidationError("javaVersion", "invalid java version")
         return v
 
     name: str
-    allocatedRAM: int
+    allocatedRAM: int = Field(le=SemoxyConfig.MAX_RAM)
     dataDir: str
     jarFile: str
-    onlineStatus: int
+    onlineStatus: int = Field(le=3, ge=0)
     software: ServerSoftware
     displayName: str
-    port: int
+    port: int = Field(ge=25000, lt=30000)
     addons: List[Addon]
     javaVersion: str
     description: str

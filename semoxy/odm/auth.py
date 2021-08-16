@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import base64
+import os
 import secrets
 import time
-from typing import List
+from typing import List, Optional
 from odmantic import Model, Reference
 from ..io.config import Config
 from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHash
@@ -13,10 +15,11 @@ class User(Model):
         collection = "user"
 
     name: str
-    email: str
+    email: Optional[str]
     password: str
-    permissions: List[str]
+    permissions: List[str] = []
     salt: str
+    isRoot: bool = False
 
     @classmethod
     def hash_password(cls, pwd: str, salt: bytes, pepper: bytes) -> str:
@@ -55,9 +58,21 @@ class User(Model):
             return False
 
     async def new_session(self) -> Session:
+        """
+        Creates a new session for this user
+        :return: the created session
+        """
         new_session = Session(sid=await Session.generate_sid(), user=self, expiration=int(time.time() + Config.SESSION_EXPIRATION))
         await Config.SEMOXY_INSTANCE.data.save(new_session)
         return new_session
+
+    @classmethod
+    def generate_salt(self) -> str:
+        """
+        generates a new 20 byte salt
+        :return: the generated salt
+        """
+        return base64.b64encode(os.urandom(20))[:20].decode()
 
 
 class Session(Model):

@@ -8,7 +8,7 @@ from websockets.exceptions import ConnectionClosed, ConnectionClosedOK
 
 from ..io.config import Config
 from ..io.wspackets import MetaMessagePacket, AuthenticationErrorPacket, BasePacket, AuthenticationSuccessPacket
-from ..mc.server import MinecraftServer
+from ..permissions import requires_permission, PermissionNode
 from ..mc.versions.base import VersionProvider
 from ..util import server_endpoint, requires_server_online, json_response, requires_post_params, requires_login
 from ..odm.auth import Session
@@ -19,6 +19,7 @@ server_blueprint = Blueprint("server", url_prefix="server")
 @server_blueprint.get("/<i:string>")
 @requires_login()
 @server_endpoint()
+@requires_permission(PermissionNode.VIEW_SERVER)
 async def get_server(req, i):
     """
     endpoint for getting server information for a single server
@@ -32,6 +33,7 @@ async def get_all_servers(req):
     """
     endpoints for getting a list of all servers
     """
+    # TODO: check permission
     o = [s.json() for s in req.app.server_manager.servers]
     return json_response(o)
 
@@ -39,6 +41,7 @@ async def get_all_servers(req):
 @server_blueprint.get("/<i:string>/start")
 @requires_login()
 @server_endpoint()
+@requires_permission(PermissionNode.START_SERVER | PermissionNode.VIEW_SERVER)
 @requires_server_online(False)
 async def start_server(req, i):
     """
@@ -100,6 +103,7 @@ async def console_websocket(req, ws):
 @server_blueprint.post("/<i:string>/command")
 @requires_login()
 @server_endpoint()
+@requires_permission(PermissionNode.VIEW_SERVER | PermissionNode.CONSOLE)
 @requires_server_online()
 @requires_post_params("command")
 async def execute_console_command(req, i):
@@ -114,6 +118,7 @@ async def execute_console_command(req, i):
 @server_blueprint.get("/<i:string>/stop")
 @requires_login()
 @server_endpoint()
+@requires_permission(PermissionNode.VIEW_SERVER | PermissionNode.STOP_SERVER)
 @requires_server_online()
 async def stop_server(req, i):
     """
@@ -134,6 +139,7 @@ async def stop_server(req, i):
 @server_blueprint.get("/<i:string>/restart")
 @requires_login()
 @server_endpoint()
+@requires_permission(PermissionNode.VIEW_SERVER | PermissionNode.START_SERVER | PermissionNode.STOP_SERVER)
 @requires_server_online()
 async def restart(req, i):
     """
@@ -151,6 +157,7 @@ async def restart(req, i):
 # TODO: rethink the CHANGEABLE_FIELDS
 @server_blueprint.patch("/<i:string>")
 @requires_login()
+@requires_permission(PermissionNode.VIEW_SERVER | PermissionNode.MANAGE_SERVER)
 @server_endpoint()
 async def update_server(req, i):
     ""
@@ -179,6 +186,7 @@ async def update_server(req, i):
 
 @server_blueprint.put("/create/<server:string>/<major_version:string>/<minor_version:string>")
 @requires_login()
+@requires_permission(PermissionNode.CREATE_SERVER)
 @requires_post_params("name", "port")
 async def create_server(req, server, major_version, minor_version):
     """
@@ -199,6 +207,7 @@ async def create_server(req, server, major_version, minor_version):
 
 @server_blueprint.get("/versions")
 @requires_login()
+@requires_permission(PermissionNode.CREATE_SERVER)
 async def get_all_versions(req):
     """
     endpoint for getting all major versions that can be installed on a minecraft server
@@ -208,6 +217,7 @@ async def get_all_versions(req):
 
 @server_blueprint.get("/versions/<software:string>/<major_version:string>")
 @requires_login()
+@requires_permission(PermissionNode.CREATE_SERVER)
 async def get_minor_versions(req, software, major_version):
     """
     endpoint for getting all minor versions for a specific major version
@@ -221,6 +231,7 @@ async def get_minor_versions(req, software, major_version):
 @server_blueprint.delete("/<i:string>")
 @requires_login()
 @server_endpoint()
+@requires_permission(PermissionNode.VIEW_SERVER | PermissionNode.DELETE_SERVER)
 async def delete_server(req, i):
     """
     deletes a server
@@ -231,6 +242,7 @@ async def delete_server(req, i):
 
 """
 # TODO: check addon code
+# TODO: check permissions
 @server_blueprint.put("/<i:string>/addons")
 @requires_login()
 @server_endpoint()

@@ -29,5 +29,6 @@ async def get_status_information(_):
         "repository": "https://github.com/SemoxyMC/Server",
         "version": "0.1",
         "description": "Semoxy is a universal decentralized Minecraft Server Interface for the Web",
-        "issueTracker": "https://github.com/SemoxyMC/Server/issues"
+        "issueTracker": "https://github.com/SemoxyMC/Server/issues",
+        "hasRoot": Config.SEMOXY_INSTANCE.root_user_created
     })
