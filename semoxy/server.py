@@ -1,3 +1,6 @@
+"""
+the semoxy server main class
+"""
 import os
 import socket
 import time
@@ -8,6 +11,7 @@ import pymongo.errors
 from argon2 import PasswordHasher
 from motor.core import AgnosticDatabase
 from sanic import Sanic
+from odmantic import AIOEngine
 
 from .endpoints.auth import account_blueprint
 from .endpoints.misc import misc_blueprint
@@ -16,7 +20,7 @@ from .io.config import Config
 from .io.mongo import MongoClient
 from .io.regexes import Regexes
 from .mc.servermanager import ServerManager
-from .models import Session
+from .odm.auth import Session
 from .util import json_response
 
 
@@ -29,12 +33,19 @@ class Semoxy(Sanic):
     def __init__(self):
         super().__init__(__name__)
         Config.load(self)
-        self.server_manager: ServerManager = ServerManager(self)
+        self.server_manager: ServerManager = ServerManager()
         self.register_routes()
         self.public_ip: str = ""
         self.database: Optional[AgnosticDatabase] = None
         self.password_hasher: PasswordHasher = PasswordHasher()
         self.pepper: bytes = (Config.get_docker_secret("pepper") or Config.PEPPER).encode()
+
+    @property
+    def data(self) -> AIOEngine:
+        """
+        shorthand for the odmantic engine
+        """
+        return self.mongo.odmantic
 
     def register_routes(self) -> None:
         """
@@ -81,7 +92,8 @@ class Semoxy(Sanic):
         """
         initialises mongo and reloads when the server starts
         """
-        self.database = MongoClient(loop).semoxy_db
+        self.mongo = MongoClient(loop)
+        self.database = self.mongo.semoxy_db
         await self.reload()
 
     async def reload(self):
@@ -108,15 +120,15 @@ class Semoxy(Sanic):
         req.ctx.session = None
         req.ctx.user = None
         if sid:
-            session = await Session.fetch_by_sid(sid)
+            session = await self.data.find_one(Session, Session.sid == sid)
             if not session:
                 return json_response({"error": "session id not existing", "status": 401}, status=401)
             if not session.is_expired:
                 await session.refresh()
-                req.ctx.user = await session.get_user()
+                req.ctx.user = session.user
                 req.ctx.session = session
             else:
-                await session.logout()
+                await session.delete()
                 return json_response({"error": "session expired", "status": 401}, status=401)
 
     def start(self) -> None:

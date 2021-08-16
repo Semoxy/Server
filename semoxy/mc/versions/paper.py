@@ -5,6 +5,9 @@ from ...io.config import Config
 
 
 class PaperVersionProvider(VersionProvider):
+    """
+    the version provider for paper servers
+    """
     NAME = "paper"
 
     def __init__(self):

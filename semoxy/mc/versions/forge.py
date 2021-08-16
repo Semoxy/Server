@@ -9,6 +9,9 @@ from ...util import get_path, download_and_save
 
 
 class ForgeVersionProvider(VersionProvider):
+    """
+    the version provider for forge servers
+    """
     NAME = "forge"
     DOWNLOAD_FILE_NAME = "installer.jar"
 

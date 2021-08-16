@@ -1,3 +1,6 @@
+"""
+class for managing and caching all minecraft servers
+"""
 import asyncio
 import os
 import shutil
@@ -12,7 +15,7 @@ from ..io.config import Config
 from ..io.regexes import Regexes
 from ..io.wsmanager import WebsocketConnectionManager
 from ..io.wspackets import ServerAddPacket, ServerDeletePacket
-from ..models.server import ServerData
+from ..odm.server import Server, ServerSoftware
 from ..util import json_response, download_and_save
 
 
@@ -22,8 +25,7 @@ class ServerManager:
     """
     __slots__ = "mc", "servers", "versions", "connections"
 
-    def __init__(self, mc):
-        self.mc = mc
+    def __init__(self):
         self.servers = []
         self.versions = VersionManager()
         self.connections = WebsocketConnectionManager()
@@ -33,8 +35,8 @@ class ServerManager:
         fetches all servers and adds them to its server list
         """
         self.servers = []
-        async for server in self.mc.database["server"].find({}):
-            s = await MinecraftServer.from_id(server["_id"])
+        async for server in Config.SEMOXY_INSTANCE.data.find(Server):
+            s = MinecraftServer(server)
             if s.data.onlineStatus == 2:  # if the server was online, start it
                 await s.start()
             elif s.data.onlineStatus != 0:
@@ -50,7 +52,7 @@ class ServerManager:
         :param port: the port to check
         :return: whether there is a server running or not
         """
-        return await ServerData.fetch(port=port, onlineStatus={"$ne": 0}) is not None
+        return await Config.SEMOXY_INSTANCE.data.find_one(Server, (Server.port == port) & (Server.onlineStatus != 0)) is not None
 
     async def get_ids(self):
         """
@@ -88,7 +90,7 @@ class ServerManager:
         shutil.rmtree(server.data.dataDir, ignore_errors=False)
 
         # Remove server document
-        await server.data.delete()
+        await Config.SEMOXY_INSTANCE.data.delete(server.data)
 
         await ServerDeletePacket(server.id).send(self)
         self.servers.remove(server)
@@ -103,6 +105,7 @@ class ServerManager:
         :param ram: the ram the server should have, can be changed later
         :param port: the port the server should run on in the future
         :param java_version: the java version that runs the server
+        :param description: the optional server description
         :return: sanic json response
         """
         # check if version existing
@@ -147,18 +150,20 @@ class ServerManager:
         # save agreed eula
         await ServerManager.save_eula(dir_)
 
-        data = await ServerData.new(
+        software = ServerSoftware(
+            server=version_provider.NAME,
+            majorVersion=major_version,
+            minorVersion=minor_version,
+            minecraftVersion=await version_provider.get_minecraft_version(major_version, minor_version)
+        )
+
+        data = Server(
             name=name,
             allocatedRAM=ram,
             dataDir=dir_,
             jarFile="server.jar",
             onlineStatus=0,
-            software={
-                "server": version_provider.NAME,
-                "majorVersion": major_version,
-                "minorVersion": minor_version,
-                "minecraftVersion": await version_provider.get_minecraft_version(major_version, minor_version)
-            },
+            software=software,
             displayName=display_name,
             port=port,
             addons=[],
@@ -166,12 +171,13 @@ class ServerManager:
             description=str(description) if description is not None else None
         )
 
-        s = await MinecraftServer.from_id(data.id)
+        await Config.SEMOXY_INSTANCE.data.save(data)
+        s = MinecraftServer(data)
 
         try:
             await version_provider.post_download(dir_, major_version, minor_version)
         except Exception as e:
-            s.data.delete()
+            await Config.SEMOXY_INSTANCE.data.delete(s.data)
             return json_response({"error": "Error during Server Creation", "description": " ".join(e.args), "status": 500}, status=500)
 
         self.servers.append(s)
@@ -185,7 +191,7 @@ class ServerManager:
         checks whether there is no server with the specified name
         :param name: the name to check
         """
-        return await ServerData.fetch(name=name) is None
+        return await Config.SEMOXY_INSTANCE.data.find_one(Server, Server.name == name) is None
 
     @staticmethod
     async def save_eula(path):
@@ -223,7 +229,7 @@ eula=true
         s = s.lower().replace(" ", "-")
         o = []
         for e in s:
-            if e.isalnum() | (e == "-"):
+            if e.isalnum() or (e == "-"):
                 o.append(e)
             else:
                 o.append("_")

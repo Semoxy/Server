@@ -1,3 +1,6 @@
+"""
+A class for abstracting away sending commands to and receiving output from the server
+"""
 import asyncio
 import locale
 import subprocess
@@ -57,6 +60,9 @@ class ServerCommunication:
 
 
 class AsyncStreamWatcher(threading.Thread):
+    """
+    watches a stream like a stdout for new lines and calls callbacks
+    """
     __slots__ = "loop", "stream", "proc", "on_close", "on_out"
 
     def __init__(self, loop, stream, proc, on_out, on_close):

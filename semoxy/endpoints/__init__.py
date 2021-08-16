@@ -1,0 +1,3 @@
+"""
+all semoxy http endpoints
+"""

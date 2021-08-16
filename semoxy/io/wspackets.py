@@ -1,3 +1,6 @@
+"""
+abstraction for websocket packet building
+"""
 from __future__ import annotations
 
 import json
@@ -12,6 +15,10 @@ if TYPE_CHECKING:
 
 
 class BasePacket:
+    """
+    the packet base class
+    this is not a valid packet
+    """
     ACTION = "NULL"
 
     def __init__(self):
@@ -22,13 +29,22 @@ class BasePacket:
 
     @property
     def data(self):
+        """
+        the data object on the output json
+        """
         return self.json["data"]
 
     async def send(self, ws):
+        """
+        sends this packet to the specified client
+        """
         await ws.send(json.dumps(self.json, default=serialize_objectids))
 
 
 class ServerStateChangePacket(BasePacket):
+    """
+    sent when some properties on a server object change
+    """
     ACTION = "SERVER_STATE_CHANGE"
 
     def __init__(self, server_id: ObjectId, **patch):
@@ -38,6 +54,9 @@ class ServerStateChangePacket(BasePacket):
 
 
 class ConsoleLinePacket(BasePacket):
+    """
+    sent when a line is printed to the server stdout or stderr
+    """
     ACTION = "CONSOLE_LINE"
 
     def __init__(self, server_id: ObjectId, message: str):
@@ -47,6 +66,9 @@ class ConsoleLinePacket(BasePacket):
 
 
 class MetaMessagePacket(BasePacket):
+    """
+    contains debug or meta information for client developers
+    """
     ACTION = "META_MESSAGE"
 
     def __init__(self, message: str):
@@ -55,6 +77,9 @@ class MetaMessagePacket(BasePacket):
 
 
 class ServerAddPacket(BasePacket):
+    """
+    sent when a new server was created
+    """
     ACTION = "SERVER_ADD"
 
     def __init__(self, server: MinecraftServer):
@@ -66,6 +91,9 @@ class ServerAddPacket(BasePacket):
 
 
 class ServerDeletePacket(BasePacket):
+    """
+    sent when a server was removed
+    """
     ACTION = "SERVER_DELETE"
 
     def __init__(self, server_id: ObjectId):
@@ -74,8 +102,14 @@ class ServerDeletePacket(BasePacket):
 
 
 class AuthenticationErrorPacket(MetaMessagePacket):
+    """
+    sent when there was an error during authentication
+    """
     ACTION = "AUTH_ERROR"
 
 
 class AuthenticationSuccessPacket(BasePacket):
+    """
+    sent when the client was authorized successfully
+    """
     ACTION = "AUTH_SUCCESS"

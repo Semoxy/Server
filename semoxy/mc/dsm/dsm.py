@@ -1,3 +1,6 @@
+"""
+the main dsm file with the dsm server
+"""
 import socket
 from json import dumps as json_dumps
 
@@ -49,6 +52,9 @@ class DSMClientConnection(ClientConnection):
         self.onclose = onclose
 
     def handle_query(self, handshake_packet):
+        """
+        event handler for query requests
+        """
         packet = PacketBuilder(0x00)
         # use our semoxy response
         query = DSMClientConnection.QUERY_RESPONSE
@@ -58,6 +64,9 @@ class DSMClientConnection(ClientConnection):
         self.send_packet(packet.build())
 
     def pre_login(self, uuid, name):
+        """
+        pre login event handler when the uuid and username is known
+        """
         # check if player is permitted to start server
         if (name.lower() in self.permitted_players) | (self.permitted_players == []):
             packet = PacketBuilder(0x00)
@@ -77,6 +86,9 @@ class DSMClientConnection(ClientConnection):
         return False
 
     def login_error(self):
+        """
+        login error handler
+        """
         packet = PacketBuilder(0x00)
         packet.add_string(json_dumps(Messages.DISCONNECT_ERROR_MESSAGE))
         self.send_packet(packet.build())
@@ -94,8 +106,8 @@ class DSMServer:
         self.serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.keypair = generate_keypair()
         self.running = False
-        # hardcoded names for testing
-        self.eligible_players = ["ximanton_"]
+        # fixme: hardcoded names for testing
+        self.eligible_players = []
         self.loop = loop
 
     def stop(self):

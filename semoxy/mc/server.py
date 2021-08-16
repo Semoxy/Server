@@ -1,5 +1,7 @@
+"""
+class that represents a single minecraft server
+"""
 import os
-import zipfile
 from asyncio import Event
 from time import strftime
 from typing import Any, Dict, Optional
@@ -11,41 +13,21 @@ from ..io.config import Config
 from ..io.regexes import Regexes
 from ..io.wspackets import ServerStateChangePacket, ConsoleLinePacket
 from ..mc.communication import ServerCommunication
-from ..models.server import ServerData
+from ..odm.server import Server
 
 
 class MinecraftServer:
     """
-    class for representing a single minecraft server
+    class that represents a single minecraft server
     """
     __slots__ = "communication", "output", "files_to_remove", "_stop_event", "data"
 
-    CHANGEABLE_FIELDS = {
-        "displayName": lambda x: Regexes.SERVER_DISPLAY_NAME.match(x),
-        "port": lambda x: isinstance(x, int) and 25000 < x < 30000,
-        "allocatedRAM": lambda x: isinstance(x, int) and x <= Config.MAX_RAM,
-        "javaVersion": lambda x: x in Config.JAVA["installations"].keys(),
-        "description": lambda x: isinstance(x, str)
-    }
-
-    def __init__(self, data: ServerData):
-        self.data: ServerData = data
+    def __init__(self, data: Server):
+        self.data: Server = data
         self.communication = None
         self.output = []
         self.files_to_remove = []
         self._stop_event = None
-
-    @classmethod
-    async def from_id(cls, _id: ServerData.ObjectId):
-        """
-        fetches a MinecraftServer by its id
-        """
-        data = await ServerData.fetch_from_id(_id)
-
-        if not data:
-            return None
-
-        return MinecraftServer(data)
 
     @property
     def start_command(self) -> str:
@@ -59,7 +41,7 @@ class MinecraftServer:
         """
         all connected clients
         """
-        return self.data.semoxy().server_manager.connections
+        return Config.SEMOXY_INSTANCE.server_manager.connections
 
     @property
     def id(self) -> ObjectId:
@@ -67,14 +49,6 @@ class MinecraftServer:
         the id of this server
         """
         return self.data.id
-
-    async def update(self, data):
-        """
-        updates the server instance based on the specified document and broadcasts the change to the clients
-        :param data: the attributes to update
-        """
-        await ServerStateChangePacket(self.id, **data).send(self.connections)
-        await self.data.set_attributes(**data)
 
     async def set_online_status(self, status) -> None:
         """
@@ -85,7 +59,8 @@ class MinecraftServer:
         3 - stopping
         :param status: the server status to update
         """
-        await self.data.set_online_status(status)
+        self.data.onlineStatus = status
+        await self.data.save()
         await ServerStateChangePacket(self.id, onlineStatus=status).send(self.connections)
 
     @property
@@ -102,7 +77,7 @@ class MinecraftServer:
         """
         the sanic server loop
         """
-        return self.data.semoxy().loop
+        return Config.SEMOXY_INSTANCE.loop
 
     async def start(self) -> None:
         """
@@ -191,8 +166,8 @@ class MinecraftServer:
         :return: a json dict
         """
         return {
-            **self.data.json(),
-            "supports": Config.VERSIONS[self.data.software["server"]]["supports"],
+            **self.data.dict(),
+            "supports": Config.VERSIONS[self.data.software.server]["supports"],
             "consoleOut": self.output
         }
 
@@ -201,21 +176,22 @@ class MinecraftServer:
         gets the version provider of this server
         :return: the version provider
         """
-        return await self.data.semoxy().server_manager.versions.provider_by_name(self.data.software["server"])
+        return await Config.SEMOXY_INSTANCE.server_manager.versions.provider_by_name(self.data.software.server)
 
     async def delete(self):
         """
         deletes this server
         """
-        await self.data.semoxy().server_manager.delete_server(self)
+        await Config.SEMOXY_INSTANCE.server_manager.delete_server(self)
 
     async def supports(self, addon_type: str) -> bool:
         """
         checks if the server supports the specified type of addon
         """
-        return Config.VERSIONS[self.data.software["server"]]["supports"][addon_type]
+        return Config.VERSIONS[self.data.software.server]["supports"][addon_type]
 
     # TODO: addon stuff
+    """
     async def add_addon(self, addon_id, addon_type, addon_version):
         await self.remove_addon(addon_id)
         res = await (await self.get_version_provider()).add_addon(addon_id, addon_type, addon_version, self.data.dataDir)
@@ -251,3 +227,4 @@ class MinecraftServer:
         for addon in self.data.addons:
             zipf.write(addon["filePath"], os.path.relpath(addon["filePath"], self.data.dataDir))
         zipf.close()
+    """
