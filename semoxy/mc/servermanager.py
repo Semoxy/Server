@@ -217,7 +217,8 @@ eula=true
         """
         shuts down all servers and blocks until this has happened
         """
-        await asyncio.gather(*[(await server.stop()).wait() for server in self.servers])
+        online_servers = [server for server in self.servers if server.data.onlineStatus == 2]
+        await asyncio.gather(*[(await server.stop()).wait() for server in online_servers])
 
     @staticmethod
     def format_name(s):
