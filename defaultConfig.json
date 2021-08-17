@@ -43,6 +43,7 @@
   "staticIP": "",
   "pepper": "20 rndm pepper bytes",
   "maxRam": 6,
+  "disableRootUser": false,
   "mongoDB": {
     "host": "localhost",
     "port": 27017,

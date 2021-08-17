@@ -2,17 +2,17 @@
 the semoxy server main class
 """
 import os
+import secrets
 import socket
 import time
 from typing import Optional
-import secrets
 
 import aiohttp
 import pymongo.errors
 from argon2 import PasswordHasher
 from motor.core import AgnosticDatabase
-from sanic import Sanic
 from odmantic import AIOEngine
+from sanic import Sanic
 
 from .endpoints.auth import account_blueprint
 from .endpoints.misc import misc_blueprint
@@ -137,7 +137,8 @@ class Semoxy(Sanic):
             print("No connection to mongodb could be established. Check your preferences in the config.json and if your mongo server is running!")
             self.stop()
             exit(1)
-        await self.check_root_user()
+        if not Config.DISABLE_ROOT:
+            await self.check_root_user()
 
     async def set_session_middleware(self, req):
         """

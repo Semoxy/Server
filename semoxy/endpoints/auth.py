@@ -19,6 +19,9 @@ async def login_post(req):
     """
     user = await Config.SEMOXY_INSTANCE.data.find_one(User, User.name == req.json["username"])
     if user:
+        if user.isRoot and Config.DISABLE_ROOT:
+            return json_response({"error": "root is disabled", "description": "the root user is disabled in this semoxy instance. enable it in the config.json"}, status=400)
+
         if await user.check_password(str(req.json["password"])):
             session = await user.new_session()
             return json_response({"success": "logged in successfully", "data": {"sessionId": session.sid}})
@@ -59,7 +62,7 @@ async def fetch_me(req):
 @account_blueprint.post("/create-root-user")
 @requires_post_params("username", "password", "creationSecret")
 async def create_root_user(req):
-    if Config.SEMOXY_INSTANCE.root_user_created:
+    if Config.SEMOXY_INSTANCE.root_user_created or Config.DISABLE_ROOT:
         return json_response({"error": "Already existing", "description": "there is already a root user in this semoxy instance"}, status=400)
 
     if req.json["creationSecret"] != Config.SEMOXY_INSTANCE.root_user_token:

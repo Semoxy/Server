@@ -27,7 +27,8 @@ class Config:
         "ADDONS": ("addons", {}),
         "JAVA": ("javaSettings", {}),
         "PEPPER": ("pepper", "20 rndm pepper bytes"),
-        "STATIC_IP": ("staticIP", "")
+        "STATIC_IP": ("staticIP", ""),
+        "DISABLE_ROOT": ("disableRootUser", False)
     }
 
     DB_PATH = "data.db"
@@ -41,6 +42,7 @@ class Config:
     PEPPER = ""
     STATIC_IP = ""
     START_TIME: int = 0
+    DISABLE_ROOT: bool = False
 
     @staticmethod
     def load(mcweb) -> None:
