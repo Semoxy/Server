@@ -15,7 +15,7 @@ from ..io.config import Config
 from ..io.regexes import Regexes
 from ..io.wsmanager import WebsocketConnectionManager
 from ..io.wspackets import ServerAddPacket, ServerDeletePacket
-from ..odm.server import Server, ServerSoftware
+from ..models.server import Server, ServerSoftware
 from ..util import json_response, download_and_save
 
 

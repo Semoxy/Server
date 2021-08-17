@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 import time
-from typing import List
+from typing import List, Optional
 from odmantic import Model, Reference
 from ..io.config import Config
 from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHash
@@ -13,10 +13,11 @@ class User(Model):
         collection = "user"
 
     name: str
-    email: str
+    email: Optional[str]
     password: str
     permissions: List[str]
     salt: str
+    isRoot: bool = False
 
     @classmethod
     def hash_password(cls, pwd: str, salt: bytes, pepper: bytes) -> str:

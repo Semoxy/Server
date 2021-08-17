@@ -3,7 +3,7 @@ websocket session and broadcast management
 """
 from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 
-from ..odm.auth import User
+from ..models.auth import User
 
 
 class WebsocketConnectionManager:

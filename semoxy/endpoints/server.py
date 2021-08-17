@@ -8,10 +8,9 @@ from websockets.exceptions import ConnectionClosed, ConnectionClosedOK
 
 from ..io.config import Config
 from ..io.wspackets import MetaMessagePacket, AuthenticationErrorPacket, BasePacket, AuthenticationSuccessPacket
-from ..mc.server import MinecraftServer
 from ..mc.versions.base import VersionProvider
 from ..util import server_endpoint, requires_server_online, json_response, requires_post_params, requires_login
-from ..odm.auth import Session
+from ..models.auth import Session
 
 server_blueprint = Blueprint("server", url_prefix="server")
 
