@@ -20,6 +20,7 @@ class User(Model):
     permissions: List[str] = []
     salt: str
     isRoot: bool = False
+    permissionsOutdated: bool = True
 
     @classmethod
     def hash_password(cls, pwd: str, salt: bytes, pepper: bytes) -> str:

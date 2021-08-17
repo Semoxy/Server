@@ -6,7 +6,7 @@ from sanic.blueprints import Blueprint
 from ..odm.auth import User
 from ..io.config import Config
 from ..util import json_response, requires_post_params, requires_login
-from ..permissions import requires_permission, PermissionNode
+from ..permissions import requires_global_permission, Permission
 
 
 account_blueprint = Blueprint("account", url_prefix="account")
@@ -89,7 +89,7 @@ async def create_root_user(req):
 
 @account_blueprint.post("/create-user")
 @requires_login()
-@requires_permission(PermissionNode.CREATE_USER)
+@requires_global_permission(Permission.Global.CREATE_USER)
 @requires_post_params("username", "password", "email")
 async def create_user(req):
     # TODO: implement permission system
