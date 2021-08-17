@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import base64
+import os
 import secrets
 import time
-from typing import List, Optional
-from odmantic import Model, Reference
-from ..io.config import Config
+from typing import Optional
+
 from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHash
+from odmantic import Model, Reference
+
+from ..io.config import Config
 
 
 class User(Model):
@@ -15,7 +19,6 @@ class User(Model):
     name: str
     email: Optional[str]
     password: str
-    permissions: List[str]
     salt: str
     isRoot: bool = False
 
@@ -59,6 +62,14 @@ class User(Model):
         new_session = Session(sid=await Session.generate_sid(), user=self, expiration=int(time.time() + Config.SESSION_EXPIRATION))
         await Config.SEMOXY_INSTANCE.data.save(new_session)
         return new_session
+
+    @classmethod
+    def generate_salt(self) -> str:
+        """
+        generates a new 20 byte salt
+        :return: the generated salt
+        """
+        return base64.b64encode(os.urandom(20))[:20].decode()
 
 
 class Session(Model):

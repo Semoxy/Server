@@ -3,10 +3,9 @@ authentication and user related endpoints
 """
 from sanic.blueprints import Blueprint
 
-from ..models.auth import User
 from ..io.config import Config
+from ..models.auth import User
 from ..util import json_response, requires_post_params, requires_login
-
 
 account_blueprint = Blueprint("account", url_prefix="account")
 
@@ -54,7 +53,7 @@ async def fetch_me(req):
     """
     sends information about the current user to the client
     """
-    return json_response({"username": req.ctx.user.name, "permissions": req.ctx.user.permissions})
+    return json_response({"username": req.ctx.user.name})
 
 
 @account_blueprint.post("/create-root-user")
