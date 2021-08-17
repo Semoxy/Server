@@ -4,7 +4,9 @@ A class for abstracting away sending commands to and receiving output from the s
 import asyncio
 import locale
 import subprocess
+import sys
 import threading
+from typing import Tuple, Optional
 
 
 class ServerCommunication:
@@ -23,7 +25,7 @@ class ServerCommunication:
         self.loop = loop
         self.command = command
         self.cwd = cwd
-        self.process = None
+        self.process: Optional[subprocess.Popen] = None
         self.on_output = on_output
         self.on_close = on_close
         self.running = False
@@ -38,6 +40,20 @@ class ServerCommunication:
         self.running = True
         AsyncStreamWatcher(self.loop, self.process.stdout, self.process, self.on_output, self.on_close).start()
         AsyncStreamWatcher(self.loop, self.process.stdout, self.process, self.on_stderr, None).start()
+
+    def get_resources(self) -> Tuple[int, float]:
+        """
+        gets the ram and cpu usage of the process
+        NOTE: only works on linux
+        :return: Tuple[ram, cpu]
+        """
+        if sys.platform != "linux" and sys.platform != "linux2":
+            raise RuntimeError("get_resources only works on linux")
+
+        cpu = float(subprocess.check_output(f"ps -p {self.process.pid} -o %cpu", shell=True).split()[-1].strip())
+        with open(f"/proc/{self.process.pid}/statm") as f:
+            ram = int(f.read().split()[0])
+        return ram, cpu
 
     async def process_end(self):
         self.running = False

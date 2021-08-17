@@ -4,7 +4,8 @@ class for managing and caching all minecraft servers
 import asyncio
 import os
 import shutil
-from typing import Optional
+import sys
+from typing import Optional, List
 
 import aiofiles
 
@@ -15,6 +16,7 @@ from ..io.config import Config
 from ..io.regexes import Regexes
 from ..io.wsmanager import WebsocketConnectionManager
 from ..io.wspackets import ServerAddPacket, ServerDeletePacket
+from ..models.event import ServerStat
 from ..models.server import Server, ServerSoftware
 from ..util import json_response, download_and_save
 
@@ -26,7 +28,7 @@ class ServerManager:
     __slots__ = "mc", "servers", "versions", "connections"
 
     def __init__(self):
-        self.servers = []
+        self.servers: List[MinecraftServer] = []
         self.versions = VersionManager()
         self.connections = WebsocketConnectionManager()
 
@@ -44,6 +46,7 @@ class ServerManager:
             self.servers.append(s)
 
         await self.versions.reload_all()
+        Config.SEMOXY_INSTANCE.loop.create_task(self.server_stat_loop())
 
     @classmethod
     async def server_running_on(cls, port):
@@ -53,12 +56,6 @@ class ServerManager:
         :return: whether there is a server running or not
         """
         return await Config.SEMOXY_INSTANCE.data.find_one(Server, (Server.port == port) & (Server.onlineStatus != 0)) is not None
-
-    async def get_ids(self):
-        """
-        :return: ids of all loaded servers
-        """
-        return [x.id for x in self.servers]
 
     async def get_server(self, i) -> Optional[MinecraftServer]:
         """
@@ -200,11 +197,7 @@ class ServerManager:
         :param path: the directory to save the eula in
         """
         async with aiofiles.open(os.path.join(path, "eula.txt"), mode="w") as f:
-            await f.write("""#By changing the setting below to TRUE you are indicating your agreement to our EULA (https://account.mojang.com/documents/minecraft_eula).
-#You also agree that tacos are tasty, and the best food in the world.
-#Wed Mar 10 14:26:14 CEST 2020
-eula=true
-""")
+            await f.write("eula=true")
 
     async def send(self, msg):
         """
@@ -219,6 +212,37 @@ eula=true
         """
         online_servers = [server for server in self.servers if server.data.onlineStatus == 2]
         await asyncio.gather(*[(await server.stop()).wait() for server in online_servers])
+
+    async def report_server_statistics(self) -> None:
+        """
+        saves all server statistics like online players and ram+cpu usage to the database
+        """
+        logged_stats = []
+        for server in self.servers:
+            if not server.running:
+                continue
+            ram, cpu = None, None
+            if sys.platform in ["linux", "linux2"]:
+                ram, cpu = server.communication.get_resources()
+            player_count = len(server.online_players)
+
+            stat_log = ServerStat(
+                server=server.data,
+                playerCount=player_count,
+                ramUsage=ram,
+                cpuUsage=cpu
+            )
+            logged_stats.append(stat_log)
+        await Config.SEMOXY_INSTANCE.data.save_all(logged_stats)
+
+    async def server_stat_loop(self):
+        """
+        reports the server statistics in 10 second intervals
+        :return:
+        """
+        while Config.SEMOXY_INSTANCE.is_running:
+            await self.report_server_statistics()
+            await asyncio.sleep(10)
 
     @staticmethod
     def format_name(s):

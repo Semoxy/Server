@@ -2,15 +2,20 @@
 all minecraft server related endpoints
 """
 import json
+from datetime import datetime
 
+from bson.objectid import ObjectId
+from motor.core import AgnosticCollection, AgnosticCursor
+from pymongo import ASCENDING, DESCENDING
 from sanic.blueprints import Blueprint
 from websockets.exceptions import ConnectionClosed, ConnectionClosedOK
 
 from ..io.config import Config
 from ..io.wspackets import MetaMessagePacket, AuthenticationErrorPacket, BasePacket, AuthenticationSuccessPacket
 from ..mc.versions.base import VersionProvider
-from ..util import server_endpoint, requires_server_online, json_response, requires_post_params, requires_login
 from ..models.auth import Session
+from ..models.event import EventType, ServerEvent
+from ..util import server_endpoint, requires_server_online, json_response, requires_post_params, requires_login
 
 server_blueprint = Blueprint("server", url_prefix="server")
 
@@ -44,7 +49,9 @@ async def start_server(req, i):
     endpoints for starting the specified server
     """
     if await req.app.server_manager.server_running_on(port=req.ctx.server.data.port):
-        return json_response({"error": "Port Unavailable", "description": "there is already a server running on that port", "status": 423}, status=423)
+        return json_response(
+            {"error": "Port Unavailable", "description": "there is already a server running on that port",
+             "status": 423}, status=423)
     await req.ctx.server.start()
     return json_response({"success": "server started", "update": {"server": {"online_status": 1}}})
 
@@ -53,6 +60,7 @@ class SocketError(Exception):
     """
     exception type that makes it easier for us to disconnect the client with an error message
     """
+
     def __init__(self, packet: BasePacket):
         self.packet: BasePacket = packet
 
@@ -60,14 +68,15 @@ class SocketError(Exception):
 @server_blueprint.websocket("/events")
 async def console_websocket(req, ws):
     """
-    websocket endpoints for console output and server state change
+    websocket endpoint for console output and server state change
     """
     try:
         while True:
             packet = json.loads(await ws.recv())
 
             if packet["action"] == "AUTHENTICATE":
-                session = await Config.SEMOXY_INSTANCE.data.find_one(Session, Session.sid == packet["data"]["sessionId"])
+                session = await Config.SEMOXY_INSTANCE.data.find_one(Session,
+                                                                     Session.sid == packet["data"]["sessionId"])
 
                 if not session:
                     raise SocketError(AuthenticationErrorPacket("invalid session"))
@@ -96,6 +105,69 @@ async def console_websocket(req, ws):
     await req.ctx.semoxy.server_manager.connections.disconnected(ws)
 
 
+# ?amount=20
+# ?page=1
+# ?max_time=123456
+# ?min_time=123456
+# ?type=SERVER_START,SERVER_STOP
+# ?order=asc|desc
+@server_blueprint.get("/<i:string>/events")
+@requires_login()
+@server_endpoint()
+async def query_server_events(req, i):
+    """
+    endpoint for getting server events by filters
+    """
+    query = {
+        "server": req.ctx.server.id
+    }
+
+    maximal_time = req.args.get("max_time")
+    if maximal_time is not None:
+        max_id = ObjectId.from_datetime(datetime.fromtimestamp(int(maximal_time)))
+        if "_id" not in query:
+            query["_id"] = {}
+        query["_id"]["$le"] = max_id
+
+    minimal_time = req.args.get("min_time")
+    if minimal_time is not None:
+        min_id = ObjectId.from_datetime(datetime.fromtimestamp(int(minimal_time)))
+        if "_id" not in query:
+            query["_id"] = {}
+        query["_id"]["$ge"] = min_id
+
+    event_type = req.args.get("type")
+    if event_type is not None:
+        query["$or"] = [{"type": type_} for type_ in str(event_type).split(",")]
+
+    page = req.args.get("page")
+    if page is None:
+        page = 0
+    else:
+        page = int(page)
+
+    events_per_page = req.args.get("amount")
+    if events_per_page is None:
+        events_per_page = 256
+    events_per_page = min(int(events_per_page), 256)
+
+    event_collection: AgnosticCollection = Config.SEMOXY_INSTANCE.data.get_collection(ServerEvent)
+    cursor: AgnosticCursor = event_collection.find(query).skip(page * events_per_page).limit(events_per_page)
+
+    time_order = req.args.get("order")
+    if time_order is not None:
+        if time_order == "asc":
+            cursor.sort("_id", ASCENDING)
+        elif time_order == "desc":
+            cursor.sort("_id", DESCENDING)
+        else:
+            return json_response(
+                {"error": "invalid search direction", "description": "use either asc or desc for order"}, status=400)
+
+    results = await cursor.to_list(events_per_page)
+    return json_response(results)
+
+
 @server_blueprint.post("/<i:string>/command")
 @requires_login()
 @server_endpoint()
@@ -106,6 +178,7 @@ async def execute_console_command(req, i):
     endpoints for sending console commands to the server
     """
     command = req.json["command"]
+    await req.ctx.server.new_event(EventType.CONSOLE_COMMAND, command=command, issuer=req.ctx.user.id)
     await req.ctx.server.send_command(command)
     return json_response({"success": "command sent", "update": {}})
 
@@ -145,6 +218,7 @@ async def restart(req, i):
     await stop_event.wait()
     await req.ctx.server.start()
     return json_response({"success": "Server Restarted"})
+
 
 """
 # TODO: rethink the CHANGEABLE_FIELDS
@@ -193,7 +267,8 @@ async def create_server(req, server, major_version, minor_version):
     name = req.json["name"]
     port = req.json["port"]
     version_provider: VersionProvider = await req.app.server_manager.versions.provider_by_name(server)
-    return await req.app.server_manager.create_server(name, version_provider, major_version, minor_version, ram, port, java_version, description)
+    return await req.app.server_manager.create_server(name, version_provider, major_version, minor_version, ram, port,
+                                                      java_version, description)
 
 
 @server_blueprint.get("/versions")
@@ -213,7 +288,9 @@ async def get_minor_versions(req, software, major_version):
     """
     prov = await req.app.server_manager.versions.provider_by_name(software)
     if not prov:
-        return json_response({"error": "Invalid Software", "description": "there is no server software with that name: " + str(software), "status": 400}, status=400)
+        return json_response(
+            {"error": "Invalid Software", "description": "there is no server software with that name: " + str(software),
+             "status": 400}, status=400)
     return json_response(await prov.get_minor_versions(major_version))
 
 

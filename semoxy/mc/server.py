@@ -2,17 +2,18 @@
 class that represents a single minecraft server
 """
 import os
+import re
 from asyncio import Event
 from time import strftime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 
 from bson.objectid import ObjectId
 
 from .versions.base import VersionProvider
 from ..io.config import Config
-from ..io.regexes import Regexes
 from ..io.wspackets import ServerStateChangePacket, ConsoleLinePacket
 from ..mc.communication import ServerCommunication
+from ..models.event import ServerEvent, EventType
 from ..models.server import Server
 
 
@@ -20,14 +21,14 @@ class MinecraftServer:
     """
     class that represents a single minecraft server
     """
-    __slots__ = "communication", "output", "files_to_remove", "_stop_event", "data"
+    __slots__ = "communication", "files_to_remove", "_stop_event", "data", "online_players"
 
     def __init__(self, data: Server):
         self.data: Server = data
-        self.communication = None
-        self.output = []
+        self.communication: Optional[ServerCommunication] = None
         self.files_to_remove = []
         self._stop_event = None
+        self.online_players: Set[str] = set()
 
     @property
     def start_command(self) -> str:
@@ -61,6 +62,12 @@ class MinecraftServer:
         """
         self.data.onlineStatus = status
         await self.data.save()
+
+        if status == 0:
+            await self.new_event(EventType.SERVER_STOP)
+        elif status == 1:
+            await self.new_event(EventType.SERVER_START)
+
         await ServerStateChangePacket(self.id, onlineStatus=status).send(self.connections)
 
     @property
@@ -86,9 +93,7 @@ class MinecraftServer:
         """
         # shell has to be True when running with docker
         self.communication = ServerCommunication(self.loop, self.start_command, self.on_output, self.on_output, self.on_stop, cwd=self.data.dataDir, shell=Config.get_docker_secret("mongo_user") is not None)
-        self.output = []
         # Clear console on all clients
-        await ServerStateChangePacket(self.id, consoleOut=[]).send(self.connections)
         await self.set_online_status(1)
         try:
             await self.communication.begin()
@@ -132,20 +137,60 @@ class MinecraftServer:
         used to check for patterns and broadcasting to the connected websockets
         :param line: the line that is printed
         """
-        self.output.append(line)
+        line = line.strip()
 
         if self.data.onlineStatus == 1:
             # update online status when started
-            if Regexes.DONE.match(line.strip()):
+            if re.match(self.data.regexes.start, line):
                 await self.set_online_status(2)
+
+        user_join_match = re.match(self.data.regexes.playerJoin, line)
+        if user_join_match:
+            await self.on_player_join(user_join_match.group(1), user_join_match.group(2))
+
+        user_leave_match = re.match(self.data.regexes.playerLeave, line)
+        if user_leave_match:
+            await self.on_player_leave(user_leave_match.group(1))
+
+        await self.new_event(EventType.CONSOLE_MESSAGE, message=line)
+
         await ConsoleLinePacket(self.id, line).send(self.connections)
+
+    async def new_event(self, type_: str, **data) -> None:
+        """
+        creates a new event for this server and saves it to the database
+        :param type_: the EventType
+        :param data: the type specific event data
+        """
+        event = ServerEvent(
+            type=type_,
+            server=self.data,
+            data=data
+        )
+        await Config.SEMOXY_INSTANCE.data.save(event)
+
+    async def on_player_join(self, player_name: str, uuid: str) -> None:
+        """
+        called when a player joins the server
+        :param player_name: the name of the player
+        :param uuid: the uuid of the player
+        """
+        await self.new_event(EventType.PLAYER_JOIN, name=player_name, uuid=uuid)
+        self.online_players.add(player_name)
+
+    async def on_player_leave(self, player_name: str) -> None:
+        """
+        called when a player leaves the server
+        :param player_name: the name of the player
+        """
+        await self.new_event(EventType.PLAYER_LEAVE, name=player_name)
+        self.online_players.remove(player_name)
 
     async def put_console_message(self, msg: str):
         """
         appends a new line to the server output and broadcasts it to the clients
         :param msg: the message to put
         """
-        self.output.append(msg)
         await ConsoleLinePacket(self.id, msg).send(self.connections)
 
     async def send_command(self, cmd: str) -> None:
@@ -167,8 +212,7 @@ class MinecraftServer:
         """
         return {
             **self.data.dict(),
-            "supports": Config.VERSIONS[self.data.software.server]["supports"],
-            "consoleOut": self.output
+            "supports": Config.VERSIONS[self.data.software.server]["supports"]
         }
 
     async def get_version_provider(self) -> VersionProvider:
