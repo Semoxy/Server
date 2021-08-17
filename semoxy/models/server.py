@@ -1,10 +1,12 @@
 
 from typing import List
+
 from odmantic import Model, EmbeddedModel, Field
 from pydantic import validator
-from ..io.config import Config as SemoxyConfig
-from ..io.regexes import Regexes
-from . import SemoxyValidationError
+
+from semoxy.io.config import Config as SemoxyConfig
+from semoxy.io.regexes import Regexes
+from semoxy.models import SemoxyValidationError
 
 
 class ServerSoftware(EmbeddedModel):

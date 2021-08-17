@@ -3,11 +3,10 @@ authentication and user related endpoints
 """
 from sanic.blueprints import Blueprint
 
-from ..odm.auth import User
 from ..io.config import Config
-from ..util import json_response, requires_post_params, requires_login
+from ..models.auth import User
 from ..permissions import requires_global_permission, Permission
-
+from ..util import json_response, requires_post_params, requires_login
 
 account_blueprint = Blueprint("account", url_prefix="account")
 

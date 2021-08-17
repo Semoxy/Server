@@ -2,17 +2,17 @@
 the semoxy server main class
 """
 import os
+import secrets
 import socket
 import time
 from typing import Optional
-import secrets
 
 import aiohttp
 import pymongo.errors
 from argon2 import PasswordHasher
 from motor.core import AgnosticDatabase
-from sanic import Sanic
 from odmantic import AIOEngine
+from sanic import Sanic
 
 from .endpoints.auth import account_blueprint
 from .endpoints.misc import misc_blueprint
@@ -21,7 +21,7 @@ from .io.config import Config
 from .io.mongo import MongoClient
 from .io.regexes import Regexes
 from .mc.servermanager import ServerManager
-from .odm.auth import Session, User
+from .models.auth import Session, User
 from .util import json_response
 
 

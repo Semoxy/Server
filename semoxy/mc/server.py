@@ -8,12 +8,12 @@ from typing import Any, Dict, Optional
 
 from bson.objectid import ObjectId
 
+from semoxy.models.server import Server
 from .versions.base import VersionProvider
 from ..io.config import Config
 from ..io.regexes import Regexes
 from ..io.wspackets import ServerStateChangePacket, ConsoleLinePacket
 from ..mc.communication import ServerCommunication
-from ..odm.server import Server
 
 
 class MinecraftServer:

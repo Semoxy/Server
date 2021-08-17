@@ -8,6 +8,7 @@ from typing import Optional
 
 import aiofiles
 
+from semoxy.models.server import Server, ServerSoftware
 from .server import MinecraftServer
 from .versions.base import VersionProvider
 from .versions.manager import VersionManager
@@ -15,7 +16,6 @@ from ..io.config import Config
 from ..io.regexes import Regexes
 from ..io.wsmanager import WebsocketConnectionManager
 from ..io.wspackets import ServerAddPacket, ServerDeletePacket
-from ..odm.server import Server, ServerSoftware
 from ..util import json_response, download_and_save
 
 
