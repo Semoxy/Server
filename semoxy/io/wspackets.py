@@ -8,6 +8,7 @@ from typing import Any, Dict, TYPE_CHECKING
 
 from bson.objectid import ObjectId
 
+from ..models.event import ServerEvent
 from ..util import serialize_objectids
 
 if TYPE_CHECKING:
@@ -41,6 +42,18 @@ class BasePacket:
         await ws.send(json.dumps(self.json, default=serialize_objectids))
 
 
+class EventPacket(BasePacket):
+    """
+    a packet that is sent on a server event
+    """
+    def __init__(self, event: ServerEvent):
+        super(EventPacket, self).__init__()
+        self.json["action"] = event.type
+        self.data["serverId"] = event.server.id
+        self.data["eventData"] = event.data
+        self.data["id"] = event.id
+
+
 class ServerStateChangePacket(BasePacket):
     """
     sent when some properties on a server object change
@@ -51,18 +64,6 @@ class ServerStateChangePacket(BasePacket):
         super(ServerStateChangePacket, self).__init__()
         self.data["id"] = server_id
         self.data["patch"] = patch
-
-
-class ConsoleLinePacket(BasePacket):
-    """
-    sent when a line is printed to the server stdout or stderr
-    """
-    ACTION = "CONSOLE_LINE"
-
-    def __init__(self, server_id: ObjectId, message: str):
-        super(ConsoleLinePacket, self).__init__()
-        self.data["id"] = server_id
-        self.data["message"] = message
 
 
 class MetaMessagePacket(BasePacket):

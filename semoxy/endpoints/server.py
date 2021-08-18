@@ -125,9 +125,7 @@ async def query_server_events(req, i):
     maximal_time = req.args.get("max_time")
     if maximal_time is not None:
         max_id = ObjectId.from_datetime(datetime.fromtimestamp(int(maximal_time)))
-        if "_id" not in query:
-            query["_id"] = {}
-        query["_id"]["$le"] = max_id
+        query["_id"] = {"$le": max_id}
 
     minimal_time = req.args.get("min_time")
     if minimal_time is not None:
@@ -138,17 +136,18 @@ async def query_server_events(req, i):
 
     event_type = req.args.get("type")
     if event_type is not None:
+        # OR comma separated event types together
         query["$or"] = [{"type": type_} for type_ in str(event_type).split(",")]
 
     page = req.args.get("page")
     if page is None:
         page = 0
-    else:
-        page = int(page)
+    page = int(page)
 
     events_per_page = req.args.get("amount")
     if events_per_page is None:
         events_per_page = 256
+    # maximal 256 events per page
     events_per_page = min(int(events_per_page), 256)
 
     event_collection: AgnosticCollection = Config.SEMOXY_INSTANCE.data.get_collection(ServerEvent)
@@ -161,8 +160,7 @@ async def query_server_events(req, i):
         elif time_order == "desc":
             cursor.sort("_id", DESCENDING)
         else:
-            return json_response(
-                {"error": "invalid search direction", "description": "use either asc or desc for order"}, status=400)
+            return json_response({"error": "invalid search direction", "description": "use either asc or desc for order"}, status=400)
 
     results = await cursor.to_list(events_per_page)
     return json_response(results)

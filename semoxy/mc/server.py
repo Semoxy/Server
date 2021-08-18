@@ -3,15 +3,15 @@ class that represents a single minecraft server
 """
 import os
 import re
+import sys
 from asyncio import Event
-from time import strftime
 from typing import Any, Dict, Optional, Set
 
 from bson.objectid import ObjectId
 
 from .versions.base import VersionProvider
 from ..io.config import Config
-from ..io.wspackets import ServerStateChangePacket, ConsoleLinePacket
+from ..io.wspackets import ServerStateChangePacket, EventPacket
 from ..mc.communication import ServerCommunication
 from ..models.event import ServerEvent, EventType
 from ..models.server import Server
@@ -98,10 +98,7 @@ class MinecraftServer:
         try:
             await self.communication.begin()
         except Exception as e:
-            print(self.data.dataDir)
-            print(self.start_command)
-            print("Couldn't find Start Command")
-            await ConsoleLinePacket(self.id, "Error: " + str(e)).send(self.connections)
+            await self.new_event(EventType.SERVER_EXCEPTION, message=str(e))
             await self.set_online_status(0)
 
     async def stop(self) -> Optional[Event]:
@@ -154,8 +151,6 @@ class MinecraftServer:
 
         await self.new_event(EventType.CONSOLE_MESSAGE, message=line)
 
-        await ConsoleLinePacket(self.id, line).send(self.connections)
-
     async def new_event(self, type_: str, **data) -> None:
         """
         creates a new event for this server and saves it to the database
@@ -168,6 +163,7 @@ class MinecraftServer:
             data=data
         )
         await Config.SEMOXY_INSTANCE.data.save(event)
+        await EventPacket(event).send(self.connections)
 
     async def on_player_join(self, player_name: str, uuid: str) -> None:
         """
@@ -186,19 +182,11 @@ class MinecraftServer:
         await self.new_event(EventType.PLAYER_LEAVE, name=player_name)
         self.online_players.remove(player_name)
 
-    async def put_console_message(self, msg: str):
-        """
-        appends a new line to the server output and broadcasts it to the clients
-        :param msg: the message to put
-        """
-        await ConsoleLinePacket(self.id, msg).send(self.connections)
-
     async def send_command(self, cmd: str) -> None:
         """
         prints a command to the server stdin and flushes it
         :param cmd: the command to print
         """
-        await self.put_console_message(f"[{strftime('%H:%M:%S')} SEMOXY CONSOLE COMMAND]: " + cmd)
 
         if cmd.startswith("stop"):
             await self.set_online_status(3)
@@ -210,9 +198,14 @@ class MinecraftServer:
         convert the server to a json object
         :return: a json dict
         """
+        ram_cpu = self.communication.get_resources() if sys.platform in ["linux", "linux2"] else None, None
+
         return {
             **self.data.dict(),
-            "supports": Config.VERSIONS[self.data.software.server]["supports"]
+            "supports": Config.VERSIONS[self.data.software.server]["supports"],
+            "ramUsage": ram_cpu[1],
+            "cpuUsage": ram_cpu[0],
+            "onlinePlayers": self.online_players
         }
 
     async def get_version_provider(self) -> VersionProvider:

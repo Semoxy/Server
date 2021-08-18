@@ -13,7 +13,6 @@ from bson.objectid import ObjectId
 from sanic.request import Request
 from sanic.response import json, HTTPResponse
 
-
 if sys.version_info.minor < 7:
     from async_generator import asynccontextmanager
 else:
@@ -37,6 +36,8 @@ def serialize_objectids(v):
     # translate ObjectIds
     if isinstance(v, ObjectId):
         return str(v)
+    if isinstance(v, set):
+        return list(v)
     raise ValueError("value can't be serialized: " + str(v))
 
 

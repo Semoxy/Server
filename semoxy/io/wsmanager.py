@@ -38,11 +38,14 @@ class WebsocketConnectionManager:
         broadcasts a message to all connected clients
         :param msg: the message to send
         """
+        to_disc = []
         for ws in self.connections:
             try:
                 await ws.send(msg)
             except (ConnectionClosedOK, ConnectionClosedError):
-                await self.disconnected(ws)
+                to_disc.append(ws)
+        for ws in to_disc:
+            await self.disconnected(ws)
 
     async def send(self, msg):
         """
