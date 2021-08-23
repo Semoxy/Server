@@ -1,6 +1,4 @@
 import os
-import shutil
-import sys
 from functools import wraps
 from json import dumps as json_dumps
 from os.path import split as split_path
@@ -13,10 +11,7 @@ from bson.objectid import ObjectId
 from sanic.request import Request
 from sanic.response import json, HTTPResponse
 
-if sys.version_info.minor < 7:
-    from async_generator import asynccontextmanager
-else:
-    from contextlib import asynccontextmanager
+from semoxy.io.config import Config
 
 
 def json_response(di: Union[dict, list], **kwargs) -> HTTPResponse:
@@ -78,7 +73,7 @@ def server_endpoint():
             if "i" not in kwargs.keys():
                 return json_response({"error": "KeyError", "status": 400, "description": "please specify the server id"}, status=404)
             i = kwargs["i"]
-            server = await req.app.server_manager.get_server(i)
+            server = await Config.SEMOXY_INSTANCE.server_manager.get_server(i)
             if server is None:
                 return json_response({"error": "Not Found", "status": 404, "description": "no server was found for your id"}, status=404)
 
@@ -174,16 +169,3 @@ class _TmpDir:
         returns the path to a file with the specified name in the directory
         """
         return os.path.join(self.path, name)
-
-
-@asynccontextmanager
-async def TempDir(path="."):
-    """
-    Context Manager for using temporary directory
-    :param path: the path of the directory
-    """
-    d: _TmpDir = _TmpDir(os.path.join(path, "tmp"))
-    if not os.path.isdir(d.path):
-        os.mkdir(d.path)
-    yield d
-    shutil.rmtree(d.path)

@@ -1,10 +1,14 @@
 """
 misc endpoints that effect the entire semoxy instance
 """
+import os
+from uuid import UUID
+
 from sanic.blueprints import Blueprint
-from sanic.response import HTTPResponse
+from sanic.response import HTTPResponse, file
 
 from ..io.config import Config
+from ..mc.mojang import download_head
 from ..util import requires_login, json_response
 
 misc_blueprint = Blueprint("misc")
@@ -32,3 +36,16 @@ async def get_status_information(_):
         "issueTracker": "https://github.com/SemoxyMC/Server/issues",
         "hasRoot": Config.SEMOXY_INSTANCE.root_user_created or Config.DISABLE_ROOT
     })
+
+
+@misc_blueprint.get("/playerhead/<uuid:string>")
+async def get_player_head(_, uuid: str):
+    """
+    endpoint for getting the head of a player
+    """
+    if not os.path.isdir("playerheads"):
+        os.mkdir("playerheads")
+    head_file = os.path.join("playerheads", uuid + ".png")
+    if not os.path.isfile(head_file):
+        await download_head(UUID(uuid), head_file)
+    return await file(head_file, mime_type="image/png")

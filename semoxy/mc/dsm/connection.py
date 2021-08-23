@@ -1,7 +1,6 @@
 """
 classes for managing a client connection
 """
-import uuid
 from json import dumps as json_dumps
 from os import urandom
 
@@ -144,7 +143,7 @@ class ClientConnection:
                     self.handle_ping(packet)
                 # encryption response, encrypted connection gets established
                 elif self.state == 2:
-                    self.handle_encryption_response(packet)
+                    await self.handle_encryption_response(packet)
         # close socket when ended
         self.socket.close()
 
@@ -180,7 +179,7 @@ class ClientConnection:
         """
         pass
 
-    def handle_encryption_response(self, client_packet):
+    async def handle_encryption_response(self, client_packet):
         """
         handles the encryption response packet and enabled encryption and verifies the client session.
         not safe to override.
@@ -199,20 +198,21 @@ class ClientConnection:
         # login hash for verifying session
         login_hash = generate_login_hash(b"", self.secret, self.public_key)
         # request if the player has joined our server
-        resp = has_player_joined(login_hash, self.username)
-        # if correct session
-        if resp.name:
-            # set uuid
-            self.uuid = uuid.UUID(resp.uuid)
-            # fire event, disconnect when cancelled
-            if not self.pre_login(resp.uuid, resp.name):
-                self.disconnect()
-                return
-            # login success packet
-            self.send_login_success()
-            # another event
-            self.post_login()
-        else:
+        resp = await has_player_joined(login_hash, self.username)
+
+        if not resp:
             # event when incorrect session
             self.login_error()
             self.disconnect()
+            return
+
+        self.username, self.uuid = resp
+
+        # fire event, disconnect when cancelled
+        if not self.pre_login(self.uuid, self.username):
+            self.disconnect()
+            return
+        # login success packet
+        self.send_login_success()
+        # another event
+        self.post_login()

@@ -1,3 +1,6 @@
+"""
+Execute this file to run Semoxy
+"""
 from semoxy import Semoxy
 
 

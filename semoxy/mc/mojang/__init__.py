@@ -1,5 +1,4 @@
 """
-mojang api wrapper
+a small mojang/ minecraft api wrapper
 """
-from .api import *
-from .util import long_uuid
+from .api import has_player_joined, download_head, get_uuid
