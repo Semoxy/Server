@@ -9,6 +9,9 @@ class SnapshotVersionProvider(VersionProvider):
     the version provider for vanilla snapshot servers
     """
     NAME = "snapshot"
+    DISPLAY_NAME = "Vanilla Snapshot"
+    DESCRIPTION = "Play the experimental development versions of Minecraft"
+    IMAGE_URL = "$BASE/static/assets/grass_block_side.png"
 
     def __init__(self):
         self.versions = {}
@@ -49,6 +52,8 @@ class VanillaVersionProvider(SnapshotVersionProvider):
     the version provider for vanilla servers
     """
     NAME = "vanilla"
+    DISPLAY_NAME = "Vanilla"
+    DESCRIPTION = "The default Minecraft Servers directly from Mojang"
 
     async def reload(self):
         async with aiohttp.ClientSession() as session:

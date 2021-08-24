@@ -14,6 +14,9 @@ class ForgeVersionProvider(VersionProvider):
     """
     NAME = "forge"
     DOWNLOAD_FILE_NAME = "installer.jar"
+    DISPLAY_NAME = "Forge"
+    DESCRIPTION = "Forge can be used to play with Minecraft Mods"
+    IMAGE_URL = "https://avatars.githubusercontent.com/u/1390178?s=280&v=4"
 
     def __init__(self):
         self.versions = {}

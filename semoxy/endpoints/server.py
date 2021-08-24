@@ -269,29 +269,6 @@ async def create_server(req, server, major_version, minor_version):
                                                       java_version, description)
 
 
-@server_blueprint.get("/versions")
-@requires_login()
-async def get_all_versions(req):
-    """
-    endpoint for getting all major versions that can be installed on a minecraft server
-    """
-    return json_response(await req.app.server_manager.versions.get_all_major_versions_json())
-
-
-@server_blueprint.get("/versions/<software:string>/<major_version:string>")
-@requires_login()
-async def get_minor_versions(req, software, major_version):
-    """
-    endpoint for getting all minor versions for a specific major version
-    """
-    prov = await req.app.server_manager.versions.provider_by_name(software)
-    if not prov:
-        return json_response(
-            {"error": "Invalid Software", "description": "there is no server software with that name: " + str(software),
-             "status": 400}, status=400)
-    return json_response(await prov.get_minor_versions(major_version))
-
-
 @server_blueprint.delete("/<i:string>")
 @requires_login()
 @server_endpoint()

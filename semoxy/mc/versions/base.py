@@ -11,6 +11,9 @@ class VersionProvider:
     """
     NAME = "version provider"
     DOWNLOAD_FILE_NAME = "server.jar"
+    DISPLAY_NAME = "VersionProvider"
+    DESCRIPTION = "base version provider"
+    IMAGE_URL = ""
 
     async def reload(self) -> None:
         """

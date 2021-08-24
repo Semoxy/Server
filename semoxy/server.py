@@ -14,9 +14,7 @@ from motor.core import AgnosticDatabase
 from odmantic import AIOEngine
 from sanic import Sanic
 
-from .endpoints.auth import account_blueprint
-from .endpoints.misc import misc_blueprint
-from .endpoints.server import server_blueprint
+from .endpoints import account_blueprint, version_blueprint, server_blueprint, misc_blueprint
 from .io.config import Config
 from .io.mongo import MongoClient
 from .io.regexes import Regexes
@@ -54,14 +52,16 @@ class Semoxy(Sanic):
         """
         registers middleware, listeners and routes to sanic
         """
+        self.static("static", "static")
         self.blueprint(server_blueprint)
         self.blueprint(account_blueprint)
         self.blueprint(misc_blueprint)
-        self.register_listener(self.before_server_start, "before_server_start")
-        self.register_listener(self.after_server_stop, "after_server_stop")
+        self.blueprint(version_blueprint)
+        self.register_listener(self._before_server_start, "before_server_start")
+        self.register_listener(self._after_server_stop, "after_server_stop")
         self.register_middleware(self.set_session_middleware, "request")
 
-    async def after_server_stop(self, app, loop):
+    async def _after_server_stop(self, app, loop):
         """
         called when sanic has shutdown
         shuts down all minecraft servers
@@ -91,7 +91,7 @@ class Semoxy(Sanic):
                     ip = await resp.text()
         self.public_ip = await Semoxy.check_ip(ip)
 
-    async def before_server_start(self, app, loop):
+    async def _before_server_start(self, app, loop):
         """
         initialises mongo and reloads when the server starts
         """

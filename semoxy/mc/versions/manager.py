@@ -40,11 +40,17 @@ class VersionManager:
                 return p
         return None
 
-    async def get_all_major_versions_json(self) -> dict:
+    async def get_all_major_versions_json(self) -> list:
         """
         bundles all softwares and their major versions into a json object
         """
-        out = {}
+        out = []
         for v in self.provider:
-            out[v.NAME] = await v.get_major_versions()
+            out.append({
+                "id": v.NAME,
+                "majorVersions": await v.get_major_versions(),
+                "name": v.DISPLAY_NAME,
+                "description": v.DESCRIPTION,
+                "image": v.IMAGE_URL
+            })
         return out
