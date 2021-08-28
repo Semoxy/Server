@@ -14,6 +14,8 @@ class VersionProvider:
     DISPLAY_NAME = "VersionProvider"
     DESCRIPTION = "base version provider"
     IMAGE_URL = ""
+    MAJOR_VERSION_NAME = "Minecraft Version"
+    MINOR_VERSION_NAME = "Build"
 
     async def reload(self) -> None:
         """

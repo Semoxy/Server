@@ -51,6 +51,8 @@ class VersionManager:
                 "majorVersions": await v.get_major_versions(),
                 "name": v.DISPLAY_NAME,
                 "description": v.DESCRIPTION,
-                "image": v.IMAGE_URL
+                "image": v.IMAGE_URL,
+                "majorVersionName": v.MAJOR_VERSION_NAME,
+                "minorVersionName": v.MINOR_VERSION_NAME
             })
         return out

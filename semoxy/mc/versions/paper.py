@@ -12,6 +12,7 @@ class PaperVersionProvider(VersionProvider):
     DISPLAY_NAME = "PaperMC"
     DESCRIPTION = "Paper aims to improve the performance of spigot servers"
     IMAGE_URL = "https://avatars.githubusercontent.com/u/7608950?s=200&v=4"
+    MINOR_VERSION_NAME = "Paper Release"
 
     def __init__(self):
         self.versions = {}

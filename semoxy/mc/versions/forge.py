@@ -17,6 +17,7 @@ class ForgeVersionProvider(VersionProvider):
     DISPLAY_NAME = "Forge"
     DESCRIPTION = "Forge can be used to play with Minecraft Mods"
     IMAGE_URL = "https://avatars.githubusercontent.com/u/1390178?s=280&v=4"
+    MINOR_VERSION_NAME = "Forge Release"
 
     def __init__(self):
         self.versions = {}
