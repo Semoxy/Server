@@ -198,7 +198,7 @@ class MinecraftServer:
         convert the server to a json object
         :return: a json dict
         """
-        ram_cpu = self.communication.get_resources() if sys.platform in ["linux", "linux2"] else None, None
+        ram_cpu = self.communication.get_resources() if sys.platform in ["linux", "linux2"] and self.communication else None, None
 
         return {
             **self.data.dict(),
