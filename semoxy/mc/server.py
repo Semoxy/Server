@@ -64,9 +64,9 @@ class MinecraftServer:
         await self.data.save()
 
         if status == 0:
-            await self.new_event(EventType.SERVER_STOP)
+            await self.create_event(EventType.SERVER_STOP)
         elif status == 1:
-            await self.new_event(EventType.SERVER_START)
+            await self.create_event(EventType.SERVER_START)
 
         await ServerStateChangePacket(self.id, onlineStatus=status).send(self.connections)
 
@@ -98,7 +98,7 @@ class MinecraftServer:
         try:
             await self.communication.begin()
         except Exception as e:
-            await self.new_event(EventType.SERVER_EXCEPTION, message=str(e))
+            await self.create_event(EventType.SERVER_EXCEPTION, message=str(e))
             await self.set_online_status(0)
 
     async def stop(self) -> Optional[Event]:
@@ -149,9 +149,9 @@ class MinecraftServer:
         if user_leave_match:
             await self.on_player_leave(user_leave_match.group(1))
 
-        await self.new_event(EventType.CONSOLE_MESSAGE, message=line)
+        await self.create_event(EventType.CONSOLE_MESSAGE, message=line)
 
-    async def new_event(self, type_: str, **data) -> None:
+    async def create_event(self, type_: str, **data) -> None:
         """
         creates a new event for this server and saves it to the database
         :param type_: the EventType
@@ -171,7 +171,7 @@ class MinecraftServer:
         :param player_name: the name of the player
         :param uuid: the uuid of the player
         """
-        await self.new_event(EventType.PLAYER_JOIN, name=player_name, uuid=uuid)
+        await self.create_event(EventType.PLAYER_JOIN, name=player_name, uuid=uuid)
         self.online_players.add(player_name)
 
     async def on_player_leave(self, player_name: str) -> None:
@@ -179,7 +179,7 @@ class MinecraftServer:
         called when a player leaves the server
         :param player_name: the name of the player
         """
-        await self.new_event(EventType.PLAYER_LEAVE, name=player_name)
+        await self.create_event(EventType.PLAYER_LEAVE, name=player_name)
         self.online_players.remove(player_name)
 
     async def send_command(self, cmd: str) -> None:

@@ -34,30 +34,30 @@ class SemoxyRequest(Request):
 
 
 class APIError:
-    ROOT_DISABLED = "root_disabled"
-    INVALID_CREDENTIALS = "invalid_credentials"
-    ALREADY_EXISTING = "already_existing"
-    INVALID_NAME = "invalid_name"
-    PORT_IN_USE = "port_in_use"
-    INVALID_SORT_DIRECTION = "invalid_sort_direction"
-    UNKNOWN = "unknown"
-    INVALID_VERSION = "invalid_version"
-    TOO_MUCH_RAM = "too_much_ram"
-    INVALID_PORT_TYPE = "invalid_port_type"
-    INVALID_PORT = "invalid_port"
-    ILLEGAL_SERVER_NAME = "illegal_server_name"
-    INVALID_JAVA_VERSION = "invalid_java_version"
-    SERVER_VERSION_POST_INSTALL = "server_version_post_install"
-    MISSING_VALUE = "missing_value"
-    INVALID_SERVER = "invalid_server"
-    INVALID_SERVER_STATUS = "invalid_server_status"
-    UNAUTHENTICATED = "unauthenticated"
-    NO_PERMISSION = "no_permission"
-    INVALID_SESSION = "invalid_session"
-    SESSION_EXPIRED = "session_expired"
+    ROOT_DISABLED = "root_disabled", 400
+    INVALID_CREDENTIALS = "invalid_credentials", 401
+    ALREADY_EXISTING = "already_existing", 400
+    INVALID_NAME = "invalid_name", 400
+    PORT_IN_USE = "port_in_use", 423
+    INVALID_SORT_DIRECTION = "invalid_sort_direction", 400
+    UNKNOWN = "unknown", 500
+    INVALID_VERSION = "invalid_version", 400
+    TOO_MUCH_RAM = "too_much_ram", 400
+    INVALID_PORT_TYPE = "invalid_port_type", 400
+    INVALID_PORT = "invalid_port", 400
+    ILLEGAL_SERVER_NAME = "illegal_server_name", 400
+    INVALID_JAVA_VERSION = "invalid_java_version", 400
+    SERVER_VERSION_POST_INSTALL = "server_version_post_install", 500
+    MISSING_VALUE = "missing_value", 400
+    INVALID_SERVER = "invalid_server", 404
+    INVALID_SERVER_STATUS = "invalid_server_status", 423
+    UNAUTHENTICATED = "unauthenticated", 401
+    NO_PERMISSION = "no_permission", 403
+    INVALID_SESSION = "invalid_session", 401
+    SESSION_EXPIRED = "session_expired", 401
 
 
-def json_error(error: str, description: str, status: int = 400, **additional) -> HTTPResponse:
+def json_error(error: Tuple[str, int], description: str, status: int = 400, **additional) -> HTTPResponse:
     """
     generates a json error api response
     :param error: the error code, a value of APIError
@@ -66,10 +66,10 @@ def json_error(error: str, description: str, status: int = 400, **additional) ->
     :return: the created sanic.response.HTTPResponse
     """
     return json_response({
-        "error": "err_ " + str(error),
-        "description": description,
-        **additional
-    }, status=status)
+        **additional,
+        "error": "err_ " + error[0],
+        "description": description
+    }, status=error[1])
 
 
 def json_response(di: Union[dict, list], **kwargs) -> HTTPResponse:
@@ -129,7 +129,7 @@ def server_endpoint():
         @wraps(f)
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             if "i" not in kwargs.keys():
-                return json_error(APIError.MISSING_VALUE, "please specify the server id in the uri", 400)
+                return json_error(APIError.MISSING_VALUE, "please specify the server id in the uri")
             i = kwargs["i"]
             server = await Config.SEMOXY_INSTANCE.server_manager.get_server(i)
             if server is None:

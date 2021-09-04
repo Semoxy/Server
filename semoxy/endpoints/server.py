@@ -175,7 +175,7 @@ async def execute_console_command(req, i):
     endpoints for sending console commands to the server
     """
     command = req.json["command"]
-    await req.ctx.server.new_event(EventType.CONSOLE_COMMAND, command=command, issuer=req.ctx.user.id)
+    await req.ctx.server.create_event(EventType.CONSOLE_COMMAND, command=command, issuer=req.ctx.user.id)
     await req.ctx.server.send_command(command)
     return json_response({"success": "command sent", "update": {}})
 
