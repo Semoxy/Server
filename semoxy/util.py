@@ -175,6 +175,7 @@ def renew_root_creation_token() -> None:
     """
     renews the root account creation secret in root.txt
     """
+    print("regenerating root user creation secret")
     with open("root.txt", "w") as f:
         f.write(secrets.token_urlsafe(48))
 

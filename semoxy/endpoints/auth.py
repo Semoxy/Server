@@ -57,7 +57,7 @@ async def fetch_me(req):
     """
     sends information about the current user to the client
     """
-    return json_response({"username": req.ctx.user.name})
+    return json_response({"username": req.ctx.user.name, "root": req.ctx.user.isRoot})
 
 
 @account_blueprint.post("/create-root-user")

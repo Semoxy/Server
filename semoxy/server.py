@@ -86,7 +86,6 @@ class Semoxy(Sanic):
             self.stop()
             raise ConnectionError("No connection to mongodb could be established. Check your preferences in the config.json and if your mongo server is running!")
         if not Config.DISABLE_ROOT and not await self.get_root_user():
-            print("No root user found, generating secret")
             renew_root_creation_token()
 
     async def set_session_middleware(self, req):

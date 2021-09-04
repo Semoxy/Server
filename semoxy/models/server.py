@@ -50,7 +50,7 @@ class Server(Model):
         await Config.SEMOXY_INSTANCE.odm.save(self)
 
     @validator("allocatedRAM")
-    def check_max_ram(self, v):
+    def check_max_ram(cls, v):
         """
         makes sure that the ram of this server does not exceed the ram limit
         """
@@ -59,7 +59,7 @@ class Server(Model):
         return v
 
     @validator("name")
-    def check_name(self, v):
+    def check_name(cls, v):
         """
         makes sure the server name matches the corresponding regex
         """
@@ -68,7 +68,7 @@ class Server(Model):
         return v
 
     @validator("displayName")
-    def check_display_name(self, v):
+    def check_display_name(cls, v):
         """
         makes sure the server display name matches the corresponding regex
         """
@@ -77,7 +77,7 @@ class Server(Model):
         return v
 
     @validator("port")
-    def check_port(self, v):
+    def check_port(cls, v):
         """
         makes sure the server port is in the allowed range
         """
@@ -86,7 +86,7 @@ class Server(Model):
         return v
 
     @validator("javaVersion")
-    def check_java_version(self, v):
+    def check_java_version(cls, v):
         """
         makes sure the java version of this server is valid
         """
