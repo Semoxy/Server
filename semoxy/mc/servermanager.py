@@ -18,7 +18,7 @@ from ..io.wsmanager import WebsocketConnectionManager
 from ..io.wspackets import ServerAddPacket, ServerDeletePacket
 from ..models.event import ServerStat
 from ..models.server import Server, ServerSoftware
-from ..util import json_response, download_and_save
+from ..util import json_response, download_and_save, APIError, json_error
 
 
 class ServerManager:
@@ -107,25 +107,25 @@ class ServerManager:
         """
         # check if version existing
         if not isinstance(version_provider, VersionProvider):
-            return json_response({"error": "Invalid Server", "description": "use /server/versions to view all valid servers and versions", "status": 404}, status=404)
+            return json_error(APIError.INVALID_VERSION, "the specified server software is invalid")
         if not await version_provider.has_version(major_version, minor_version):
-            return json_response({"error": "Invalid Version", "description": "use /server/versions to view all valid servers and their versions", "status": 404}, status=404)
+            return json_error(APIError.INVALID_VERSION, "the specified software version is invalid")
 
         # Check ram
         if ram > Config.MAX_RAM:
-            return json_response({"error": "Too Much RAM", "description": "maximal ram is " + str(Config.MAX_RAM), "status": 400, "maxRam": Config.MAX_RAM}, status=400)
+            return json_error(APIError.TOO_MUCH_RAM, f"the maximal value for the allocatedRAM is {Config.MAX_RAM}")
 
         if not isinstance(port, int):
-            return json_response({"error": "TypeError", "description": "port has to be int", "status": 400}, status=400)
+            return json_error(APIError.INVALID_PORT_TYPE, "port has to be int")
 
         if port < 25000 | port > 30000:
-            return json_response({"error": "Invalid Port", "description": f"Port range is between 25000 and 30000", "status": 400}, status=400)
+            return json_error(APIError.INVALID_PORT, "the port has to be in range 25000 - 30000")
 
         if not Regexes.SERVER_DISPLAY_NAME.match(name):
-            return json_response({"error": "Illegal Server Name", "description": f"the server name doesn't match the regex for server names", "status": 400, "regex": Regexes.SERVER_DISPLAY_NAME.pattern}, status=400)
+            return json_error(APIError.ILLEGAL_SERVER_NAME, "the server name doesn't match the regex for server names")
 
         if java_version not in Config.JAVA["installations"].keys():
-            return json_response({"error": "Invalid Java Version", "description": "there is no such java version: " + java_version, "status": 400}, status=400)
+            return json_error(APIError.INVALID_JAVA_VERSION, f"there is no java version called {java_version}")
 
         # Lowercase, no special char server name
         display_name = name
@@ -175,7 +175,7 @@ class ServerManager:
             await version_provider.post_download(dir_, major_version, minor_version)
         except Exception as e:
             await Config.SEMOXY_INSTANCE.odm.delete(s.data)
-            return json_response({"error": "Error during Server Creation", "description": " ".join(e.args), "status": 500}, status=500)
+            return json_error(APIError.SERVER_VERSION_POST_INSTALL, " ".join(e.args), 500)
 
         self.servers.append(s)
 

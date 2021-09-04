@@ -15,7 +15,8 @@ from ..io.wspackets import MetaMessagePacket, AuthenticationErrorPacket, BasePac
 from ..mc.versions.base import VersionProvider
 from ..models.auth import Session
 from ..models.event import EventType, ServerEvent
-from ..util import server_endpoint, requires_server_online, json_response, requires_post_params, requires_login
+from ..util import server_endpoint, requires_server_online, json_response, requires_post_params, requires_login, \
+    APIError, json_error
 
 server_blueprint = Blueprint("server", url_prefix="server")
 
@@ -49,9 +50,7 @@ async def start_server(req, i):
     endpoints for starting the specified server
     """
     if await req.app.server_manager.server_running_on(port=req.ctx.server.data.port):
-        return json_response(
-            {"error": "Port Unavailable", "description": "there is already a server running on that port",
-             "status": 423}, status=423)
+        return json_error(APIError.PORT_IN_USE, "there is already a server running on that port", 423)
     await req.ctx.server.start()
     return json_response({"success": "server started", "update": {"server": {"online_status": 1}}})
 
@@ -160,7 +159,7 @@ async def query_server_events(req, i):
         elif time_order == "desc":
             cursor.sort("_id", DESCENDING)
         else:
-            return json_response({"error": "invalid search direction", "description": "use either asc or desc for order"}, status=400)
+            return json_error(APIError.INVALID_SORT_DIRECTION, "use either asc or desc for order")
 
     results = await cursor.to_list(events_per_page)
     return json_response(results)
@@ -192,7 +191,7 @@ async def stop_server(req, i):
     stop_event = await req.ctx.server.stop()
 
     if stop_event is None:
-        return json_response({"error": "Error stopping server", "description": "", "status": 500}, status=500)
+        return json_error(APIError.UNKNOWN, "error while stopping the server", 500)
 
     block = req.args.get("block")
     if block:
@@ -211,7 +210,8 @@ async def restart(req, i):
     """
     stop_event = await req.ctx.server.stop()
 
-    assert stop_event
+    if stop_event is None:
+        return json_error(APIError.UNKNOWN, "error while stopping the server", 500)
 
     await stop_event.wait()
     await req.ctx.server.start()

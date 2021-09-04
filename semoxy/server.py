@@ -15,7 +15,7 @@ from .io.config import Config
 from .io.mongo import MongoClient
 from .mc.servermanager import ServerManager
 from .models.auth import Session, User
-from .util import json_response, renew_root_creation_token, get_public_ip
+from .util import renew_root_creation_token, get_public_ip, APIError, json_error
 
 
 class Semoxy(Sanic):
@@ -99,14 +99,14 @@ class Semoxy(Sanic):
         if sid:
             session = await self.odm.find_one(Session, Session.sid == sid)
             if not session:
-                return json_response({"error": "session id not existing", "status": 401}, status=401)
+                return json_error(APIError.INVALID_SESSION, "the specified session id is not existing", 401)
             if not session.is_expired:
                 await session.refresh()
                 req.ctx.user = session.user
                 req.ctx.session = session
             else:
                 await session.delete()
-                return json_response({"error": "session expired", "status": 401}, status=401)
+                return json_error(APIError.SESSION_EXPIRED, "your session is expired", 401)
 
     def start(self) -> None:
         """

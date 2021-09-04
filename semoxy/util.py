@@ -33,6 +33,45 @@ class SemoxyRequest(Request):
     ctx: SemoxyRequestContext
 
 
+class APIError:
+    ROOT_DISABLED = "root_disabled"
+    INVALID_CREDENTIALS = "invalid_credentials"
+    ALREADY_EXISTING = "already_existing"
+    INVALID_NAME = "invalid_name"
+    PORT_IN_USE = "port_in_use"
+    INVALID_SORT_DIRECTION = "invalid_sort_direction"
+    UNKNOWN = "unknown"
+    INVALID_VERSION = "invalid_version"
+    TOO_MUCH_RAM = "too_much_ram"
+    INVALID_PORT_TYPE = "invalid_port_type"
+    INVALID_PORT = "invalid_port"
+    ILLEGAL_SERVER_NAME = "illegal_server_name"
+    INVALID_JAVA_VERSION = "invalid_java_version"
+    SERVER_VERSION_POST_INSTALL = "server_version_post_install"
+    MISSING_VALUE = "missing_value"
+    INVALID_SERVER = "invalid_server"
+    INVALID_SERVER_STATUS = "invalid_server_status"
+    UNAUTHENTICATED = "unauthenticated"
+    NO_PERMISSION = "no_permission"
+    INVALID_SESSION = "invalid_session"
+    SESSION_EXPIRED = "session_expired"
+
+
+def json_error(error: str, description: str, status: int = 400, **additional) -> HTTPResponse:
+    """
+    generates a json error api response
+    :param error: the error code, a value of APIError
+    :param description: the error description for the user
+    :param status: the HTTP error code
+    :return: the created sanic.response.HTTPResponse
+    """
+    return json_response({
+        "error": "err_ " + str(error),
+        "description": description,
+        **additional
+    }, status=status)
+
+
 def json_response(di: Union[dict, list], **kwargs) -> HTTPResponse:
     """
     generates a json response based on a dict
@@ -90,11 +129,11 @@ def server_endpoint():
         @wraps(f)
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             if "i" not in kwargs.keys():
-                return json_response({"error": "KeyError", "status": 400, "description": "please specify the server id"}, status=404)
+                return json_error(APIError.MISSING_VALUE, "please specify the server id in the uri", 400)
             i = kwargs["i"]
             server = await Config.SEMOXY_INSTANCE.server_manager.get_server(i)
             if server is None:
-                return json_response({"error": "Not Found", "status": 404, "description": "no server was found for your id"}, status=404)
+                return json_error(APIError.INVALID_SERVER, "no server was found for your id", 404)
 
             req.ctx.server = server
             return await f(req, *args, **kwargs)
@@ -112,8 +151,7 @@ def requires_server_online(online: bool = True):
         @wraps(f)
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             if online != req.ctx.server.running:
-                return json_response({"error": "Invalid State", "status": 423, "description": "this endpoint requires the server to be " + ("online" if online else "offline")},
-                                     status=423)
+                return json_error(APIError.INVALID_SERVER_STATUS, f"this endpoint requires the server to be {'online' if online else 'offline'}", 423)
             return await f(req, *args, **kwargs)
         return decorated_function
     return decorator
@@ -129,7 +167,7 @@ def requires_post_params(*json_keys: str):
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             for prop in json_keys:
                 if prop not in req.json.keys():
-                    return json_response({"error": "KeyError", "status": 400, "description": "you need to specify " + prop, "missingField": prop}, status=404)
+                    return json_error(APIError.MISSING_VALUE, f"you need to specify {prop}", field=prop)
             return await f(req, *args, **kwargs)
         return decorated_function
     return decorator
@@ -144,29 +182,10 @@ def requires_login(logged_in: bool = True):
         @wraps(f)
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             if logged_in and not req.ctx.user:
-                return json_response({"error": "Not Logged In", "status": 401,
-                                      "description": "you need to be logged in to use this"},
-                                     status=401)
+                return json_error(APIError.UNAUTHENTICATED, "you need to be logged in to access this endpoint", 401)
             if not logged_in and req.ctx.user:
-                return json_response({"error": "Logged In", "status": 401,
-                                      "description": "you need to be logged out to use this"},
-                                     status=401)
+                return json_error(APIError.NO_PERMISSION, "you can't use this endpoint while logged in", 403)
             return await f(req, *args, **kwargs)
-        return decorated_function
-    return decorator
-
-
-def catch_keyerrors():
-    """
-    catches all KeyErrors in the decorated route and cancels request
-    """
-    def decorator(f):
-        @wraps(f)
-        async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
-            try:
-                return await f(req, *args, **kwargs)
-            except KeyError:
-                return json_response({"error": "KeyError", "description": "there was an error, check your payload"})
         return decorated_function
     return decorator
 

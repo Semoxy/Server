@@ -22,7 +22,5 @@ async def get_minor_versions(req, software, major_version):
     """
     prov = await req.app.server_manager.versions.provider_by_name(software)
     if not prov:
-        return json_response(
-            {"error": "Invalid Software", "description": "there is no server software with that name: " + str(software),
-             "status": 400}, status=400)
+        return json_error(APIError.INVALID_VERSION, f"there is no server software with that name: {software}")
     return json_response(await prov.get_minor_versions(major_version))
