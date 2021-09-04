@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import secrets
+import socket
 from functools import wraps
 from json import dumps as json_dumps
 from os.path import split as split_path
@@ -15,6 +16,7 @@ from sanic.request import Request
 from sanic.response import json, HTTPResponse
 
 from semoxy.io.config import Config
+from .io.regexes import Regexes
 
 if TYPE_CHECKING:
     from .server import Semoxy
@@ -177,3 +179,15 @@ def renew_root_creation_token() -> None:
 def get_root_creation_token() -> str:
     with open("root.txt", "r") as f:
         return f.read()
+
+
+async def get_public_ip() -> str:
+    if Config.STATIC_IP:
+        ip = Config.STATIC_IP
+    else:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://api.ipify.org/") as resp:
+                ip = await resp.text()
+    if not Regexes.IP.match(ip):
+        ip = socket.gethostbyname(ip)
+    return ip

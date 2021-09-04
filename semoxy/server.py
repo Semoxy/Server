@@ -2,11 +2,9 @@
 the semoxy server main class
 """
 import os
-import socket
 import time
 from typing import Optional
 
-import aiohttp
 import pymongo.errors
 from argon2 import PasswordHasher
 from motor.core import AgnosticDatabase
@@ -16,10 +14,9 @@ from sanic import Sanic
 from .endpoints import account_blueprint, version_blueprint, server_blueprint, misc_blueprint
 from .io.config import Config
 from .io.mongo import MongoClient
-from .io.regexes import Regexes
 from .mc.servermanager import ServerManager
 from .models.auth import Session, User
-from .util import json_response, renew_root_creation_token
+from .util import json_response, renew_root_creation_token, get_public_ip
 
 
 class Semoxy(Sanic):
@@ -65,29 +62,6 @@ class Semoxy(Sanic):
         """
         await self.server_manager.shutdown_all()
 
-    @staticmethod
-    async def check_ip(s):
-        """
-        converts an ip address or hostname to an numeric IP
-        :param s: the ip to convert
-        :return: the converted ip
-        """
-        if not Regexes.IP.match(s):
-            s = socket.gethostbyname(s)
-        return s
-
-    async def reload_ip(self):
-        """
-        reloads the public IP of the Semoxy instance host
-        """
-        if Config.STATIC_IP:
-            ip = Config.STATIC_IP
-        else:
-            async with aiohttp.ClientSession() as session:
-                async with session.get("https://api.ipify.org/") as resp:
-                    ip = await resp.text()
-        self.public_ip = await Semoxy.check_ip(ip)
-
     async def _before_server_start(self, app, loop):
         """
         initialises mongo and reloads when the server starts
@@ -103,11 +77,10 @@ class Semoxy(Sanic):
         """
         reloads the Semoxy instance, the public IP and deletes expired sessions
         """
-        await self.reload_ip()
+        self.public_ip = await get_public_ip()
         try:
             # invalidate expired sessions and websocket tickets
             await self.database["session"].delete_many({"expiration": {"$lt": time.time()}})
-            await self.database["wsticket"].delete_many({"expiration": {"$lt": time.time()}})
             await self.server_manager.init()
         except pymongo.errors.ServerSelectionTimeoutError:
             self.stop()
@@ -140,7 +113,8 @@ class Semoxy(Sanic):
         """
         starts up sanic
         """
-        if not os.path.isdir(os.path.join(os.getcwd(), "servers")):
-            os.mkdir(os.path.join(os.getcwd(), "servers"))
+        server_dir = os.path.join(os.getcwd(), "servers")
+        if not os.path.isdir(server_dir):
+            os.mkdir(server_dir)
 
         self.run(host=os.getenv("BACKEND_HOST") or "localhost", port=os.getenv("BACKEND_PORT") or 5001)
