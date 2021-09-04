@@ -134,9 +134,8 @@ class Semoxy(Sanic):
             await self.database["wsticket"].delete_many({"expiration": {"$lt": time.time()}})
             await self.server_manager.init()
         except pymongo.errors.ServerSelectionTimeoutError:
-            print("No connection to mongodb could be established. Check your preferences in the config.json and if your mongo server is running!")
             self.stop()
-            exit(1)
+            raise ConnectionError("No connection to mongodb could be established. Check your preferences in the config.json and if your mongo server is running!")
         if not Config.DISABLE_ROOT:
             await self.check_root_user()
 
