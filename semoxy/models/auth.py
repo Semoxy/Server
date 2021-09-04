@@ -27,7 +27,13 @@ class User(Model):
 
     @classmethod
     async def is_user_with_name(cls, name: str) -> bool:
-        return bool(await Config.SEMOXY_INSTANCE.data.find_one(cls, cls.name == name))
+        """
+        checks if there is a user with the given name
+        this is required for account creation since two users with the same login name would be fatal
+        :param name: the name to check
+        :return: whether there is a user with the specified name
+        """
+        return bool(await Config.SEMOXY_INSTANCE.odm.find_one(cls, cls.name == name))
 
     @classmethod
     def hash_password(cls, pwd: str, salt: bytes, pepper: bytes) -> str:
@@ -49,7 +55,7 @@ class User(Model):
             return
         new_hash: str = Config.SEMOXY_INSTANCE.password_hasher.hash(spp)
         self.password = new_hash
-        await Config.SEMOXY_INSTANCE.data.save(self)
+        await Config.SEMOXY_INSTANCE.odm.save(self)
 
     async def check_password(self, pwd: str) -> bool:
         """
@@ -66,8 +72,12 @@ class User(Model):
             return False
 
     async def new_session(self) -> Session:
+        """
+        creates a new login session for this user
+        :return: the created Session object
+        """
         new_session = Session(sid=await Session.generate_sid(), user=self, expiration=int(time.time() + Config.SESSION_EXPIRATION))
-        await Config.SEMOXY_INSTANCE.data.save(new_session)
+        await Config.SEMOXY_INSTANCE.odm.save(new_session)
         return new_session
 
     @classmethod
@@ -91,12 +101,16 @@ class Session(Model):
     expiration: int
 
     @classmethod
-    async def generate_sid(self) -> str:
+    async def generate_sid(cls) -> str:
+        """
+        generates a unique session id
+        :return: the generated, 32-byte session id
+        """
         do = True
         sid = None
         while do:
             sid = secrets.token_urlsafe(32)
-            do = bool(await Config.SEMOXY_INSTANCE.data.find_one(Session, Session.id == sid))
+            do = bool(await Config.SEMOXY_INSTANCE.odm.find_one(Session, Session.id == sid))
         return sid
 
     @property
@@ -107,11 +121,18 @@ class Session(Model):
         return self.expiration < time.time()
 
     async def delete(self):
-        await Config.SEMOXY_INSTANCE.data.delete(self)
+        """
+        invalidates this session
+        """
+        await Config.SEMOXY_INSTANCE.odm.delete(self)
 
     async def refresh(self):
+        """
+        refreshed the expiration time of this session
+        :return:
+        """
         self.expiration = int(time.time() + Config.SESSION_EXPIRATION)
-        await Config.SEMOXY_INSTANCE.data.save(self)
+        await Config.SEMOXY_INSTANCE.odm.save(self)
 
 
 """

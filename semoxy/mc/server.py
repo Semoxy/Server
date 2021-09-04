@@ -162,7 +162,7 @@ class MinecraftServer:
             server=self.data,
             data=data
         )
-        await Config.SEMOXY_INSTANCE.data.save(event)
+        await Config.SEMOXY_INSTANCE.odm.save(event)
         await EventPacket(event).send(self.connections)
 
     async def on_player_join(self, player_name: str, uuid: str) -> None:

@@ -38,8 +38,8 @@ class ServerCommunication:
         """
         self.process = subprocess.Popen(self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=self.cwd, stderr=subprocess.PIPE, shell=self.shell)
         self.running = True
-        AsyncStreamWatcher(self.loop, self.process.stdout, self.process, self.on_output, self.on_close).start()
-        AsyncStreamWatcher(self.loop, self.process.stdout, self.process, self.on_stderr, None).start()
+        StreamWatcher(self.loop, self.process.stdout, self.process, self.on_output, self.on_close).start()
+        StreamWatcher(self.loop, self.process.stdout, self.process, self.on_stderr, None).start()
 
     def get_resources(self) -> Tuple[int, float]:
         """
@@ -75,14 +75,14 @@ class ServerCommunication:
         self.write_stdin_sync(cmd)
 
 
-class AsyncStreamWatcher(threading.Thread):
+class StreamWatcher(threading.Thread):
     """
     watches a stream like a stdout for new lines and calls callbacks
     """
     __slots__ = "loop", "stream", "proc", "on_close", "on_out"
 
     def __init__(self, loop, stream, proc, on_out, on_close):
-        super(AsyncStreamWatcher, self).__init__()
+        super(StreamWatcher, self).__init__()
         self.loop = loop
         self.stream = stream
         self.proc = proc

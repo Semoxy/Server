@@ -18,7 +18,7 @@ async def login_post(req):
     """
     post endpoint for logging in a user
     """
-    user = await Config.SEMOXY_INSTANCE.data.find_one(User, User.name == req.json["username"])
+    user = await Config.SEMOXY_INSTANCE.odm.find_one(User, User.name == req.json["username"])
     if user:
         if user.isRoot and Config.DISABLE_ROOT:
             return json_response({"error": "root is disabled", "description": "the root user is disabled in this semoxy instance. enable it in the config.json"}, status=400)
@@ -70,7 +70,7 @@ async def create_root_user(req):
         renew_root_creation_token()
         return json_response({"error": "Wrong Token", "description": "the provided token is invalid. regenerating.."}, status=400)
 
-    if await Config.SEMOXY_INSTANCE.data.find_one(User, User.name == req.json["username"]):
+    if await Config.SEMOXY_INSTANCE.odm.find_one(User, User.name == req.json["username"]):
         return json_response({"error": "Username in use", "description": "there is already a user with that name"}, status=400)
 
     if await User.is_user_with_name(req.json["username"]):
@@ -84,7 +84,7 @@ async def create_root_user(req):
         salt=salt,
         isRoot=True
     )
-    await Config.SEMOXY_INSTANCE.data.save(user)
+    await Config.SEMOXY_INSTANCE.odm.save(user)
 
     return json_response({
         "success": "created root user",

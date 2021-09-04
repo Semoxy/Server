@@ -7,7 +7,6 @@ from typing import Optional
 
 import pymongo.errors
 from argon2 import PasswordHasher
-from motor.core import AgnosticDatabase
 from odmantic import AIOEngine
 from sanic import Sanic
 
@@ -23,7 +22,7 @@ class Semoxy(Sanic):
     """
     the Sanic server for Semoxy
     """
-    __slots__ = "server_manager", "public_ip", "database", "password_hasher", "pepper"
+    __slots__ = "server_manager", "public_ip", "password_hasher", "pepper"
 
     def __init__(self):
         super().__init__(__name__)
@@ -31,14 +30,13 @@ class Semoxy(Sanic):
         self.server_manager: ServerManager = ServerManager()
         self.register_routes()
         self.public_ip: str = ""
-        self.database: Optional[AgnosticDatabase] = None
         self.password_hasher: PasswordHasher = PasswordHasher()
         self.pepper: bytes = (Config.get_docker_secret("pepper") or Config.PEPPER).encode()
 
     @property
-    def data(self) -> AIOEngine:
+    def odm(self) -> AIOEngine:
         """
-        shorthand for the odmantic engine
+        shorthand for accessing the odmantic engine
         """
         return self.mongo.odmantic
 
@@ -67,11 +65,13 @@ class Semoxy(Sanic):
         initialises mongo and reloads when the server starts
         """
         self.mongo = MongoClient(loop)
-        self.database = self.mongo.semoxy_db
         await self.reload()
 
     async def get_root_user(self) -> Optional[User]:
-        return await self.data.find_one(User, User.isRoot == True)
+        """
+        :return: the root user of this semoxy instance, or None if none exists
+        """
+        return await self.odm.find_one(User, User.isRoot == True)
 
     async def reload(self):
         """
@@ -79,8 +79,8 @@ class Semoxy(Sanic):
         """
         self.public_ip = await get_public_ip()
         try:
-            # invalidate expired sessions and websocket tickets
-            await self.database["session"].delete_many({"expiration": {"$lt": time.time()}})
+            # remove expired sessions
+            await self.mongo.semoxy_db["session"].delete_many({"expiration": {"$lt": time.time()}})
             await self.server_manager.init()
         except pymongo.errors.ServerSelectionTimeoutError:
             self.stop()
@@ -98,7 +98,7 @@ class Semoxy(Sanic):
         req.ctx.session = None
         req.ctx.user = None
         if sid:
-            session = await self.data.find_one(Session, Session.sid == sid)
+            session = await self.odm.find_one(Session, Session.sid == sid)
             if not session:
                 return json_response({"error": "session id not existing", "status": 401}, status=401)
             if not session.is_expired:

@@ -38,15 +38,15 @@ async def get_uuid(player_name: str) -> Optional[uuid.UUID]:
     return uuid.UUID(data["id"])
 
 
-async def download_head(uuid: uuid.UUID, path: str) -> bool:
+async def download_head(player_uuid: uuid.UUID, path: str) -> bool:
     """
     saves the player head of the specified uuid to the specified path
-    :param uuid: the uuid to get the head of
+    :param player_uuid: the uuid to get the head of
     :param path: the path to save the head at
     :return: whether the operation was successful
     """
     async with aiohttp.ClientSession() as s:
-        async with s.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{str(uuid)}") as req:
+        async with s.get(f"https://sessionserver.mojang.com/session/minecraft/profile/{str(player_uuid)}") as req:
             if not req.ok:
                 return False
             skin_url = json.loads(base64.b64decode((await req.json())["properties"][0]["value"].encode()))["textures"]["SKIN"]["url"]

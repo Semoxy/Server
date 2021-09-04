@@ -8,6 +8,8 @@ class Regexes:
     """
     precompiled regular expressions that are used in the application
     """
+
+    # default regex for console message that indicated that a server started
     DONE = re.compile(r'^(\[[0-9]+:[0-9]+:[0-9]+ .*\]: Timings Reset)|(\[[0-9]*:[0-9]*:[0-9]*\] \[Server thread\/INFO\]: Time elapsed: [0-9]* ms)|(\[[0-9]*:[0-9]*:[0-9]*\] \[.*\]: Done \([0-9]*[\.,][0-9]*s\)! For help, type "help"( or "\?")?)$')
     SERVER_DISPLAY_NAME = re.compile(r"^[a-zA-Z0-9_\-\. ]+$")
     USER_NAME = re.compile(r"^[a-z0-9A-Z_-]{6,15}$")

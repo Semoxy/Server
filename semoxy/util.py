@@ -172,16 +172,27 @@ def catch_keyerrors():
 
 
 def renew_root_creation_token() -> None:
+    """
+    renews the root account creation secret in root.txt
+    """
     with open("root.txt", "w") as f:
         f.write(secrets.token_urlsafe(48))
 
 
 def get_root_creation_token() -> str:
+    """
+    reads the root account creation secret in root.txt
+    :return: the current root creation secret
+    """
     with open("root.txt", "r") as f:
         return f.read()
 
 
 async def get_public_ip() -> str:
+    """
+    fetches the public ip of this semoxy server
+    :return: the public ip or domain name of this semoxy server
+    """
     if Config.STATIC_IP:
         ip = Config.STATIC_IP
     else:

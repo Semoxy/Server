@@ -11,6 +11,7 @@ class ServerStat(Model):
     """
     class Config:
         collection = "statistic"
+
     server: Server = Reference()
     playerCount: int
     ramUsage: Optional[int]

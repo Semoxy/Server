@@ -75,8 +75,8 @@ async def console_websocket(req, ws):
             packet = json.loads(await ws.recv())
 
             if packet["action"] == "AUTHENTICATE":
-                session = await Config.SEMOXY_INSTANCE.data.find_one(Session,
-                                                                     Session.sid == packet["data"]["sessionId"])
+                session = await Config.SEMOXY_INSTANCE.odm.find_one(Session,
+                                                                    Session.sid == packet["data"]["sessionId"])
 
                 if not session:
                     raise SocketError(AuthenticationErrorPacket("invalid session"))
@@ -116,7 +116,7 @@ async def console_websocket(req, ws):
 @server_endpoint()
 async def query_server_events(req, i):
     """
-    endpoint for getting server events by filters
+    endpoint for getting and filtering server events
     """
     query = {
         "server": req.ctx.server.id
@@ -150,7 +150,7 @@ async def query_server_events(req, i):
     # maximal 256 events per page
     events_per_page = min(int(events_per_page), 256)
 
-    event_collection: AgnosticCollection = Config.SEMOXY_INSTANCE.data.get_collection(ServerEvent)
+    event_collection: AgnosticCollection = Config.SEMOXY_INSTANCE.odm.get_collection(ServerEvent)
     cursor: AgnosticCursor = event_collection.find(query).skip(page * events_per_page).limit(events_per_page)
 
     time_order = req.args.get("order")

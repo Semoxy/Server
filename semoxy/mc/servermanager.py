@@ -37,7 +37,7 @@ class ServerManager:
         fetches all servers and adds them to its server list
         """
         self.servers = []
-        async for server in Config.SEMOXY_INSTANCE.data.find(Server):
+        async for server in Config.SEMOXY_INSTANCE.odm.find(Server):
             s = MinecraftServer(server)
             if s.data.onlineStatus == 2:  # if the server was online, start it
                 await s.start()
@@ -55,7 +55,7 @@ class ServerManager:
         :param port: the port to check
         :return: whether there is a server running or not
         """
-        return await Config.SEMOXY_INSTANCE.data.find_one(Server, (Server.port == port) & (Server.onlineStatus != 0)) is not None
+        return await Config.SEMOXY_INSTANCE.odm.find_one(Server, (Server.port == port) & (Server.onlineStatus != 0)) is not None
 
     async def get_server(self, i) -> Optional[MinecraftServer]:
         """
@@ -87,7 +87,7 @@ class ServerManager:
         shutil.rmtree(server.data.dataDir, ignore_errors=False)
 
         # Remove server document
-        await Config.SEMOXY_INSTANCE.data.delete(server.data)
+        await Config.SEMOXY_INSTANCE.odm.delete(server.data)
 
         await ServerDeletePacket(server.id).send(self)
         self.servers.remove(server)
@@ -168,13 +168,13 @@ class ServerManager:
             description=str(description) if description is not None else None
         )
 
-        await Config.SEMOXY_INSTANCE.data.save(data)
+        await Config.SEMOXY_INSTANCE.odm.save(data)
         s = MinecraftServer(data)
 
         try:
             await version_provider.post_download(dir_, major_version, minor_version)
         except Exception as e:
-            await Config.SEMOXY_INSTANCE.data.delete(s.data)
+            await Config.SEMOXY_INSTANCE.odm.delete(s.data)
             return json_response({"error": "Error during Server Creation", "description": " ".join(e.args), "status": 500}, status=500)
 
         self.servers.append(s)
@@ -188,7 +188,7 @@ class ServerManager:
         checks whether there is no server with the specified name
         :param name: the name to check
         """
-        return await Config.SEMOXY_INSTANCE.data.find_one(Server, Server.name == name) is None
+        return await Config.SEMOXY_INSTANCE.odm.find_one(Server, Server.name == name) is None
 
     @staticmethod
     async def save_eula(path):
@@ -233,7 +233,7 @@ class ServerManager:
                 cpuUsage=cpu
             )
             logged_stats.append(stat_log)
-        await Config.SEMOXY_INSTANCE.data.save_all(logged_stats)
+        await Config.SEMOXY_INSTANCE.odm.save_all(logged_stats)
 
     async def server_stat_loop(self):
         """
