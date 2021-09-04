@@ -2,7 +2,6 @@
 the semoxy server main class
 """
 import os
-import secrets
 import socket
 import time
 from typing import Optional
@@ -20,7 +19,7 @@ from .io.mongo import MongoClient
 from .io.regexes import Regexes
 from .mc.servermanager import ServerManager
 from .models.auth import Session, User
-from .util import json_response
+from .util import json_response, renew_root_creation_token
 
 
 class Semoxy(Sanic):
@@ -38,8 +37,6 @@ class Semoxy(Sanic):
         self.database: Optional[AgnosticDatabase] = None
         self.password_hasher: PasswordHasher = PasswordHasher()
         self.pepper: bytes = (Config.get_docker_secret("pepper") or Config.PEPPER).encode()
-        self.root_user_created: bool = True
-        self.root_user_token: Optional[str] = None
 
     @property
     def data(self) -> AIOEngine:
@@ -99,29 +96,8 @@ class Semoxy(Sanic):
         self.database = self.mongo.semoxy_db
         await self.reload()
 
-    async def check_root_user(self):
-        """
-        checks if a root user is existing
-        if not, it sets up all variables and files to create a root user
-        """
-        root_user = await self.data.find_one(User, User.isRoot == True)
-        if root_user:
-            return
-
-        self.root_user_created = False
-        print("No root user found, generating secret")
-        self.regenerate_root_creation_token()
-
-    def regenerate_root_creation_token(self):
-        """
-        generates a new root creation token and dumps it into root.txt
-        """
-        if self.root_user_created:
-            return
-
-        self.root_user_token = secrets.token_urlsafe(48)
-        with open("root.txt", "w") as f:
-            f.write(self.root_user_token)
+    async def get_root_user(self) -> Optional[User]:
+        return await self.data.find_one(User, User.isRoot == True)
 
     async def reload(self):
         """
@@ -136,8 +112,9 @@ class Semoxy(Sanic):
         except pymongo.errors.ServerSelectionTimeoutError:
             self.stop()
             raise ConnectionError("No connection to mongodb could be established. Check your preferences in the config.json and if your mongo server is running!")
-        if not Config.DISABLE_ROOT:
-            await self.check_root_user()
+        if not Config.DISABLE_ROOT and not await self.get_root_user():
+            print("No root user found, generating secret")
+            renew_root_creation_token()
 
     async def set_session_middleware(self, req):
         """

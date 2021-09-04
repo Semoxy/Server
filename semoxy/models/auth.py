@@ -13,6 +13,9 @@ from ..io.config import Config
 
 
 class User(Model):
+    """
+    represents a semoxy user account
+    """
     class Config:
         collection = "user"
 
@@ -21,6 +24,10 @@ class User(Model):
     password: str
     salt: str
     isRoot: bool = False
+
+    @classmethod
+    async def is_user_with_name(cls, name: str) -> bool:
+        return bool(await Config.SEMOXY_INSTANCE.data.find_one(cls, cls.name == name))
 
     @classmethod
     def hash_password(cls, pwd: str, salt: bytes, pepper: bytes) -> str:
@@ -64,7 +71,7 @@ class User(Model):
         return new_session
 
     @classmethod
-    def generate_salt(self) -> str:
+    def generate_salt(cls) -> str:
         """
         generates a new 20 byte salt
         :return: the generated salt
@@ -73,6 +80,9 @@ class User(Model):
 
 
 class Session(Model):
+    """
+    represents a users login session
+    """
     class Config:
         collection = "session"
 

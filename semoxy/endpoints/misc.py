@@ -34,7 +34,7 @@ async def get_status_information(_):
         "version": "0.1",
         "description": "Semoxy is a universal decentralized Minecraft Server Interface for the Web",
         "issueTracker": "https://github.com/SemoxyMC/Server/issues",
-        "hasRoot": Config.SEMOXY_INSTANCE.root_user_created or Config.DISABLE_ROOT
+        "hasRoot": bool(await Config.SEMOXY_INSTANCE.get_root_user()) or Config.DISABLE_ROOT
     })
 
 

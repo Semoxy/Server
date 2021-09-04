@@ -5,7 +5,8 @@ from sanic.blueprints import Blueprint
 
 from ..io.config import Config
 from ..models.auth import User
-from ..util import json_response, requires_post_params, requires_login
+from ..util import json_response, requires_post_params, requires_login, get_root_creation_token, \
+    renew_root_creation_token
 
 account_blueprint = Blueprint("account", url_prefix="account")
 
@@ -62,19 +63,21 @@ async def fetch_me(req):
 @account_blueprint.post("/create-root-user")
 @requires_post_params("username", "password", "creationSecret")
 async def create_root_user(req):
-    if Config.SEMOXY_INSTANCE.root_user_created or Config.DISABLE_ROOT:
+    if await Config.SEMOXY_INSTANCE.get_root_user() or Config.DISABLE_ROOT:
         return json_response({"error": "Already existing", "description": "there is already a root user in this semoxy instance"}, status=400)
 
-    if req.json["creationSecret"] != Config.SEMOXY_INSTANCE.root_user_token:
-        Config.SEMOXY_INSTANCE.regenerate_root_creation_token()
+    if req.json["creationSecret"] != get_root_creation_token():
+        renew_root_creation_token()
         return json_response({"error": "Wrong Token", "description": "the provided token is invalid. regenerating.."}, status=400)
 
     if await Config.SEMOXY_INSTANCE.data.find_one(User, User.name == req.json["username"]):
         return json_response({"error": "Username in use", "description": "there is already a user with that name"}, status=400)
 
+    if await User.is_user_with_name(req.json["username"]):
+        return json_response({"error": "already_existing", "description": "There is already a user with that name"}, status=400)
+
     salt = User.generate_salt()
 
-    # TODO: check for duplicate usernames
     user = User(
         name=req.json["username"],
         password=User.hash_password(req.json["password"], salt.encode(), Config.SEMOXY_INSTANCE.pepper),
@@ -82,11 +85,10 @@ async def create_root_user(req):
         isRoot=True
     )
     await Config.SEMOXY_INSTANCE.data.save(user)
-    Config.SEMOXY_INSTANCE.root_user_created = True
-    Config.SEMOXY_INSTANCE.root_user_token = ""
 
     return json_response({
-        "success": "created root user"
+        "success": "created root user",
+        "name": user.name
     })
 
 

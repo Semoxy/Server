@@ -1,8 +1,11 @@
-import os
+from __future__ import annotations
+
+import secrets
 from functools import wraps
 from json import dumps as json_dumps
 from os.path import split as split_path
-from typing import Union, Tuple
+from types import SimpleNamespace
+from typing import Union, Tuple, TYPE_CHECKING, Optional
 from urllib.parse import urlparse
 
 import aiofiles
@@ -12,6 +15,20 @@ from sanic.request import Request
 from sanic.response import json, HTTPResponse
 
 from semoxy.io.config import Config
+
+if TYPE_CHECKING:
+    from .server import Semoxy
+    from .models.auth import User, Session
+
+
+class SemoxyRequestContext(SimpleNamespace):
+    semoxy: Semoxy
+    user: Optional[User]
+    session: Optional[Session]
+
+
+class SemoxyRequest(Request):
+    ctx: SemoxyRequestContext
 
 
 def json_response(di: Union[dict, list], **kwargs) -> HTTPResponse:
@@ -152,20 +169,11 @@ def catch_keyerrors():
     return decorator
 
 
-class _TmpDir:
-    def __init__(self, path: str):
-        self._path: str = path
+def renew_root_creation_token() -> None:
+    with open("root.txt", "w") as f:
+        f.write(secrets.token_urlsafe(48))
 
-    @property
-    def path(self) -> str:
-        """
-        the base path of the directory
-        :return:
-        """
-        return self._path
 
-    def use_file(self, name: str) -> str:
-        """
-        returns the path to a file with the specified name in the directory
-        """
-        return os.path.join(self.path, name)
+def get_root_creation_token() -> str:
+    with open("root.txt", "r") as f:
+        return f.read()
