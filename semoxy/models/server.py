@@ -1,5 +1,5 @@
 
-from typing import List
+from typing import List, Optional
 
 from odmantic import Model, EmbeddedModel, Field
 from pydantic import validator
@@ -43,7 +43,7 @@ class Server(Model):
     port: int
     addons: List[Addon]
     javaVersion: str
-    description: str
+    description: Optional[str]
     regexes: Regexes = Field(default=Regexes())
 
     async def save(self):

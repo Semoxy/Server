@@ -259,7 +259,7 @@ async def create_server(req, server, major_version, minor_version):
     :param major_version: major version
     :param minor_version: minor version
     """
-    ram = req.json.get("allocatedRAM") or 2
+    ram = req.json.get("allocatedRAM", 2)
     java_version = req.json.get("javaVersion", "default")
     description = req.json.get("description", None)
     name = req.json["name"]
