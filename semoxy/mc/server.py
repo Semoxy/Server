@@ -3,9 +3,9 @@ class that represents a single minecraft server
 """
 import os
 import re
-import sys
+import shlex
 from asyncio import Event
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional, Set, List
 
 from bson.objectid import ObjectId
 
@@ -21,7 +21,7 @@ class MinecraftServer:
     """
     class that represents a single minecraft server
     """
-    __slots__ = "communication", "files_to_remove", "_stop_event", "data", "online_players"
+    __slots__ = "communication", "ram_cpu", "files_to_remove", "_stop_event", "data", "online_players"
 
     def __init__(self, data: Server):
         self.data: Server = data
@@ -29,13 +29,25 @@ class MinecraftServer:
         self.files_to_remove = []
         self._stop_event = None
         self.online_players: Set[str] = set()
+        self.ram_cpu = None, None
 
     @property
-    def start_command(self) -> str:
+    def start_command(self) -> List[str]:
         """
         the command that is used to start the server
         """
-        return f"\"{Config.JAVA['installations'][self.data.javaVersion]['path']}\"{Config.JAVA['installations'][self.data.javaVersion]['additionalArguments']} -Xmx{self.data.allocatedRAM}G -jar {self.data.jarFile} --port {self.data.port}"
+        args = [Config.JAVA['installations'][self.data.javaVersion]['path']]
+
+        java_args = Config.JAVA['installations'][self.data.javaVersion]['additionalArguments']
+
+        if java_args:
+            args.extend(shlex.split(java_args))
+
+        args.append(f"-Xmx{self.data.allocatedRAM}G")
+        args.extend(["-jar", self.data.jarFile])
+        args.extend(["--port", str(self.data.port)])
+
+        return args
 
     @property
     def connections(self):
@@ -92,11 +104,12 @@ class MinecraftServer:
         check if server is not running before calling
         """
         # shell has to be True when running with docker
-        self.communication = ServerCommunication(self.loop, self.start_command, self.on_output, self.on_output, self.on_stop, cwd=self.data.dataDir, shell=Config.get_docker_secret("mongo_user") is not None)
-        # Clear console on all clients
+        self.communication = ServerCommunication(self.loop, self.start_command, self.on_output, self.on_output, self.on_stop, cwd=self.data.dataDir)#, shell=Config.get_docker_secret("mongo_user") is not None)
+
         await self.set_online_status(1)
         try:
             await self.communication.begin()
+            self.ram_cpu = self.communication.get_resource_usage()
         except Exception as e:
             await self.create_event(EventType.SERVER_EXCEPTION, message=str(e))
             await self.set_online_status(0)
@@ -118,6 +131,7 @@ class MinecraftServer:
         sets the server status to offline
         """
         self.communication.running = False
+        self.ram_cpu = None, None
         await self.set_online_status(0)
 
         for f in self.files_to_remove:
@@ -198,13 +212,12 @@ class MinecraftServer:
         convert the server to a json object
         :return: a json dict
         """
-        ram_cpu = self.communication.get_resources() if sys.platform in ["linux", "linux2"] and self.communication else None, None
 
         return {
             **self.data.dict(),
             "supports": Config.VERSIONS[self.data.software.server]["supports"],
-            "ramUsage": ram_cpu[1],
-            "cpuUsage": ram_cpu[0],
+            "ramUsage": self.ram_cpu[0],
+            "cpuUsage": self.ram_cpu[1],
             "onlinePlayers": self.online_players
         }
 

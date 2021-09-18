@@ -5,7 +5,7 @@ import asyncio
 import os
 import shutil
 import sys
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 import aiofiles
 
@@ -217,20 +217,20 @@ class ServerManager:
         """
         saves all server statistics like online players and ram+cpu usage to the database
         """
+
         logged_stats = []
         for server in self.servers:
             if not server.running:
                 continue
-            ram, cpu = None, None
-            if sys.platform in ["linux", "linux2"]:
-                ram, cpu = server.communication.get_resources()
+
+            server.ram_cpu = server.communication.get_resource_usage()
             player_count = len(server.online_players)
 
             stat_log = ServerStat(
                 server=server.data,
                 playerCount=player_count,
-                ramUsage=ram,
-                cpuUsage=cpu
+                ramUsage=server.ram_cpu[0],
+                cpuUsage=server.ram_cpu[1]
             )
             logged_stats.append(stat_log)
         await Config.SEMOXY_INSTANCE.odm.save_all(logged_stats)
@@ -243,6 +243,28 @@ class ServerManager:
         while Config.SEMOXY_INSTANCE.is_running:
             await self.report_server_statistics()
             await asyncio.sleep(10)
+
+    def get_total_resource_usage(self) -> Tuple[int, float]:
+        """
+        collects the ram and cpu usage of all servers
+
+        Return Values:
+            ram: the ram used by all servers (in kB)
+            cpu: the cpu usage of all servers (in percent)
+
+        :return: Tuple[ram, cpu]
+        """
+        cpu = 0
+        ram = 0
+
+        for server in self.servers:
+            if not server.running:
+                continue
+
+            ram += server.ram_cpu[0]
+            cpu += server.ram_cpu[1]
+
+        return ram, cpu
 
     @staticmethod
     def format_name(s):

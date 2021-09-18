@@ -3,10 +3,15 @@ A class for abstracting away sending commands to and receiving output from the s
 """
 import asyncio
 import locale
+import os
 import subprocess
-import sys
+import psutil
 import threading
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
+
+CPU_COUNT = psutil.cpu_count()
+PYTHON_PROCESS = psutil.Process(os.getpid())
+SYSTEM_RAM = int(psutil.virtual_memory().total / 1000)
 
 
 class ServerCommunication:
@@ -14,6 +19,24 @@ class ServerCommunication:
     A class for abstracting away sending commands to and receiving output from the server
     """
     __slots__ = "loop", "command", "cwd", "process", "on_output", "on_close", "running", "on_stderr", "shell"
+
+    @classmethod
+    def get_system_resource_usage(cls) -> Tuple[int, float]:
+        """
+        collects information about the current resource usage of this python process
+
+        Return Values:
+            ram: the ram that is currently used by this python process (in kB)
+            cpu: the cpu usage of this python process (in percent)
+
+        :return: Tuple[ram, system_ram, cpu]
+        """
+
+        with PYTHON_PROCESS.oneshot():
+            cpu = round(PYTHON_PROCESS.cpu_percent() / CPU_COUNT, 2)
+            ram = int(PYTHON_PROCESS.memory_info().rss / 1000)
+
+        return ram, cpu
 
     def __init__(self, loop, command, on_output, on_stderr, on_close, cwd=".", shell=False):
         """
@@ -25,7 +48,7 @@ class ServerCommunication:
         self.loop = loop
         self.command = command
         self.cwd = cwd
-        self.process: Optional[subprocess.Popen] = None
+        self.process: Optional[psutil.Popen] = None
         self.on_output = on_output
         self.on_close = on_close
         self.running = False
@@ -36,23 +59,24 @@ class ServerCommunication:
         """
         starts the server
         """
-        self.process = subprocess.Popen(self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=self.cwd, stderr=subprocess.PIPE, shell=self.shell)
+        self.process = psutil.Popen(self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, cwd=self.cwd, stderr=subprocess.PIPE, shell=self.shell)
         self.running = True
         StreamWatcher(self.loop, self.process.stdout, self.process, self.on_output, self.on_close).start()
         StreamWatcher(self.loop, self.process.stdout, self.process, self.on_stderr, None).start()
 
-    def get_resources(self) -> Tuple[int, float]:
+    def get_resource_usage(self) -> Tuple[int, float]:
         """
-        gets the ram and cpu usage of the process
-        NOTE: only works on linux
+        gets the ram usage and cpu time of the process
+
+        Return Values:
+            ram: the ram that is used by the subprocess (in kB)
+            cpu: the cpu usage of the subprocess (in percent)
+
         :return: Tuple[ram, cpu]
         """
-        if sys.platform != "linux" and sys.platform != "linux2":
-            raise RuntimeError("get_resources only works on linux")
-
-        cpu = float(subprocess.check_output(f"ps -p {self.process.pid} -o %cpu", shell=True).split()[-1].strip())
-        with open(f"/proc/{self.process.pid}/statm") as f:
-            ram = int(f.read().split()[0])
+        with self.process.oneshot():
+            cpu = round(self.process.cpu_percent() / CPU_COUNT, 2)
+            ram = int(self.process.memory_info().rss / 1000)
         return ram, cpu
 
     async def process_end(self):
