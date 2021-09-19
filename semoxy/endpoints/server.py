@@ -11,7 +11,8 @@ from sanic.blueprints import Blueprint
 from websockets.exceptions import ConnectionClosed, ConnectionClosedOK
 
 from ..io.config import Config
-from ..io.wspackets import MetaMessagePacket, AuthenticationErrorPacket, BasePacket, AuthenticationSuccessPacket
+from ..io.wspackets import MetaMessagePacket, AuthenticationErrorPacket, BasePacket, AuthenticationSuccessPacket, \
+    IntentEnabledPacket, IntentDisabledPacket
 from ..mc.versions.base import VersionProvider
 from ..models.auth import Session
 from ..models.event import EventType, ServerEvent
@@ -70,10 +71,12 @@ async def console_websocket(req, ws):
     websocket endpoint for console output and server state change
     """
     try:
+        conn = None
+
         while True:
             packet = json.loads(await ws.recv())
-
-            if packet["action"] == "AUTHENTICATE":
+            action = packet["action"]
+            if action == "AUTHENTICATE":
                 session = await Config.SEMOXY_INSTANCE.odm.find_one(Session,
                                                                     Session.sid == packet["data"]["sessionId"])
 
@@ -84,11 +87,22 @@ async def console_websocket(req, ws):
                     await session.delete()
                     raise SocketError(AuthenticationErrorPacket("session expired"))
 
-                await req.ctx.semoxy.server_manager.connections.connected(ws, session.user)
+                conn = await Config.SEMOXY_INSTANCE.server_manager.connections.connected(ws, session.user)
 
                 await AuthenticationSuccessPacket().send(ws)
+                continue
+
+            if not conn:
+                raise SocketError(AuthenticationErrorPacket("you are not authenticated"))
+
+            if action == "ENABLE_INTENT":
+                conn.enable_intent(packet["data"]["intent"])
+                await IntentEnabledPacket(packet["data"]["intent"]).send(ws)
+            elif action == "DISABLE_INTENT":
+                conn.disable_intent(packet["data"]["intent"])
+                await IntentDisabledPacket(packet["data"]["intent"]).send(ws)
             else:
-                await MetaMessagePacket("unsupported action").send(ws)
+                await MetaMessagePacket(f"unsupported action: {action}").send(ws)
 
     except SocketError as err:
         await err.packet.send(ws)

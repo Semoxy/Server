@@ -13,6 +13,7 @@ from sanic import Sanic
 from .endpoints import account_blueprint, version_blueprint, server_blueprint, misc_blueprint
 from .io.config import Config
 from .io.mongo import MongoClient
+from .mc.communication import ServerCommunication
 from .mc.servermanager import ServerManager
 from .models.auth import Session, User
 from .util import renew_root_creation_token, get_public_ip, APIError, json_error
@@ -32,6 +33,13 @@ class Semoxy(Sanic):
         self.public_ip: str = ""
         self.password_hasher: PasswordHasher = PasswordHasher()
         self.pepper: bytes = (Config.get_docker_secret("pepper") or Config.PEPPER).encode()
+        self.ram_cpu = self.get_total_resource_usage()
+
+    @classmethod
+    def get_total_resource_usage(cls):
+        ram, cpu = ServerCommunication.get_system_resource_usage()
+        server_ram, server_cpu = Config.SEMOXY_INSTANCE.server_manager.get_total_resource_usage()
+        return ram + server_ram, cpu + server_cpu
 
     @property
     def odm(self) -> AIOEngine:

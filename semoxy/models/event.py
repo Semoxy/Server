@@ -15,12 +15,14 @@ class ServerStat(Model):
     server: Server = Reference()
     playerCount: int
     ramUsage: Optional[int]
-    cpuUsage: Optional[int]
+    cpuUsage: Optional[float]
 
 
 class EventType:
     """
     enum for type values for a ServerEvent
+
+    TODO: add docstring with events data for each event type
     """
     SERVER_START = "SERVER_START"
     PLAYER_JOIN = "PLAYER_JOIN"

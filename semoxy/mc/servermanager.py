@@ -4,7 +4,6 @@ class for managing and caching all minecraft servers
 import asyncio
 import os
 import shutil
-import sys
 from typing import Optional, List, Tuple
 
 import aiofiles
@@ -15,7 +14,7 @@ from .versions.manager import VersionManager
 from ..io.config import Config
 from ..io.regexes import Regexes
 from ..io.wsmanager import WebsocketConnectionManager
-from ..io.wspackets import ServerAddPacket, ServerDeletePacket
+from ..io.wspackets import ServerAddPacket, ServerDeletePacket, StatUpdatePacket
 from ..models.event import ServerStat
 from ..models.server import Server, ServerSoftware
 from ..util import json_response, download_and_save, APIError, json_error
@@ -223,7 +222,12 @@ class ServerManager:
             if not server.running:
                 continue
 
-            server.ram_cpu = server.communication.get_resource_usage()
+            new_ram_cpu = server.communication.get_resource_usage()
+
+            if new_ram_cpu != server.ram_cpu:
+                await StatUpdatePacket(server.id, new_ram_cpu).send(self.connections, f"stat.{server.id}", "stat.*")
+
+            server.ram_cpu = new_ram_cpu
             player_count = len(server.online_players)
 
             stat_log = ServerStat(
@@ -234,6 +238,11 @@ class ServerManager:
             )
             logged_stats.append(stat_log)
         await Config.SEMOXY_INSTANCE.odm.save_all(logged_stats)
+
+        new_total = Config.SEMOXY_INSTANCE.get_total_resource_usage()
+        if new_total != Config.SEMOXY_INSTANCE.ram_cpu:
+            await StatUpdatePacket("*", new_total).send(self.connections)
+        Config.SEMOXY_INSTANCE.ram_cpu = new_total
 
     async def server_stat_loop(self):
         """

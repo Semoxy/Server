@@ -4,7 +4,7 @@ abstraction for websocket packet building
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, TYPE_CHECKING
+from typing import Any, Dict, TYPE_CHECKING, Tuple
 
 from bson.objectid import ObjectId
 
@@ -35,11 +35,12 @@ class BasePacket:
         """
         return self.json["data"]
 
-    async def send(self, ws):
+    async def send(self, ws, *intents):
         """
         sends this packet to the specified client
         """
-        await ws.send(json.dumps(self.json, default=serialize_objectids))
+
+        await ws.send(json.dumps(self.json, default=serialize_objectids), *intents)
 
 
 class EventPacket(BasePacket):
@@ -114,3 +115,25 @@ class AuthenticationSuccessPacket(BasePacket):
     sent when the client was authorized successfully
     """
     ACTION = "AUTH_SUCCESS"
+
+
+class StatUpdatePacket(BasePacket):
+    ACTION = "STAT_UPDATE"
+
+    def __init__(self, server_id: ObjectId, new_stats: Tuple[int, float]):
+        super(StatUpdatePacket, self).__init__()
+        self.data["serverId"] = server_id
+        self.data["ramUsage"] = new_stats[0]
+        self.data["cpuUsage"] = new_stats[1]
+
+
+class IntentEnabledPacket(BasePacket):
+    ACTION = "INTENT_ENABLED"
+
+    def __init__(self, intent: str):
+        super(IntentEnabledPacket, self).__init__()
+        self.data["intent"] = intent
+
+
+class IntentDisabledPacket(IntentEnabledPacket):
+    ACTION = "INTENT_DISABLED"

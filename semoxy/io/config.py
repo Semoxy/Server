@@ -7,7 +7,7 @@ import json
 import time
 from typing import TYPE_CHECKING
 
-from ..mc.communication import ServerCommunication, SYSTEM_RAM
+from ..mc.communication import SYSTEM_RAM
 
 if TYPE_CHECKING:
     from ..server import Semoxy
@@ -76,10 +76,7 @@ class Config:
         for k, v in Config.JAVA["installations"].items():
             java_versions[k] = v["displayName"]
 
-        ram, cpu = ServerCommunication.get_system_resource_usage()
-        server_ram, server_cpu = Config.SEMOXY_INSTANCE.server_manager.get_total_resource_usage()
-        ram += server_ram
-        cpu += server_cpu
+        ram, cpu = Config.SEMOXY_INSTANCE.ram_cpu
 
         return {
             "javaVersions": java_versions,

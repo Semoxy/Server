@@ -176,8 +176,14 @@ class MinecraftServer:
             server=self.data,
             data=data
         )
+
         await Config.SEMOXY_INSTANCE.odm.save(event)
-        await EventPacket(event).send(self.connections)
+        intents = []
+        if type_ == "CONSOLE_MESSAGE":
+            intents.append(f"console.{self.id}")
+            intents.append("console.*")
+
+        await EventPacket(event).send(self.connections, *intents)
 
     async def on_player_join(self, player_name: str, uuid: str) -> None:
         """
