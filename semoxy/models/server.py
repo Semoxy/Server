@@ -23,9 +23,18 @@ class Addon(EmbeddedModel):
 
 
 class Regexes(EmbeddedModel):
+
+    # message to mark the server as started
     start: str = r'^(\[[0-9]+:[0-9]+:[0-9]+ .*\]: Timings Reset)|(\[[0-9]*:[0-9]*:[0-9]*\] \[Server thread\/INFO\]: Time elapsed: [0-9]* ms)|(\[[0-9]*:[0-9]*:[0-9]*\] \[.*\]: Done \([0-9]*[\.,][0-9]*s\)! For help, type "help"( or "\?")?)$'
+
+    # message to notice a joined player - group(1): player name; group(2): player uuid
     playerJoin: str = r'^\[[0-9]+:[0-9]+:[0-9]+ .*\]: UUID of player (.+) is ([a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89aAbB][a-f0-9]{3}-[a-f0-9]{12})$'
+
+    # message to notice a player leave - group(1): player name; group(2): reason for leave
     playerLeave: str = r'^\[[0-9]+:[0-9]+:[0-9]+ .*\]: (.+) lost connection: (.+)$'
+
+    # regex that is applied to every message on the client to extract important information - group(1): message severity [INFO, WARN, ERROR]; group(2): message content
+    consoleMessage: str = r"^\[[0-9]+:[0-9]+:[0-9]+\]\s\[.+\/(.+)\]:\s?(.*)$"
 
 
 class Server(Model):
