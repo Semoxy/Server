@@ -3,7 +3,9 @@ all minecraft server related endpoints
 """
 import json
 from datetime import datetime
+from typing import Optional
 
+import pydantic
 from bson.objectid import ObjectId
 from motor.core import AgnosticCollection, AgnosticCursor
 from pymongo import ASCENDING, DESCENDING
@@ -16,8 +18,8 @@ from ..io.wspackets import MetaMessagePacket, AuthenticationErrorPacket, BasePac
 from ..mc.versions.base import VersionProvider
 from ..models.auth import Session
 from ..models.event import EventType, ServerEvent
-from ..util import server_endpoint, requires_server_online, json_response, requires_post_params, requires_login, \
-    APIError, json_error
+from ..util import server_endpoint, requires_server_online, json_response, requires_login, \
+    APIError, json_error, bind_model
 
 server_blueprint = Blueprint("server", url_prefix="server")
 
@@ -187,18 +189,21 @@ async def query_server_events(req, i):
     return json_response(results)
 
 
+class CommandPayload(pydantic.BaseModel):
+    command: str
+
+
 @server_blueprint.post("/<i:string>/command")
 @requires_login()
 @server_endpoint()
 @requires_server_online()
-@requires_post_params("command")
-async def execute_console_command(req, i):
+@bind_model(CommandPayload)
+async def execute_console_command(req, data: CommandPayload, i):
     """
     endpoints for sending console commands to the server
     """
-    command = req.json["command"]
-    await req.ctx.server.create_event(EventType.CONSOLE_COMMAND, command=command, issuer=req.ctx.user.id)
-    await req.ctx.server.send_command(command)
+    await req.ctx.server.create_event(EventType.CONSOLE_COMMAND, command=data.command, issuer=req.ctx.user.id)
+    await req.ctx.server.send_command(data.command)
     return json_response({"success": "command sent", "update": {}})
 
 
@@ -270,25 +275,29 @@ async def update_server(req, i):
 """
 
 
+class ServerCreationPayload(pydantic.BaseModel):
+    name: str
+    port: int = pydantic.Field(default=25565)
+    allocatedRAM: int = pydantic.Field(default=2)
+    javaVersion: str = pydantic.Field(default="default")
+    description: Optional[str]
+
+
 @server_blueprint.put("/create/<server:string>/<major_version:string>/<minor_version:string>")
 @requires_login()
-@requires_post_params("name", "port")
-async def create_server(req, server, major_version, minor_version):
+@bind_model(ServerCreationPayload)
+async def create_server(req, data: ServerCreationPayload, server, major_version, minor_version):
     """
     creates a new server
     :param req: sanic request
+    :param data: post data
     :param server: server type
     :param major_version: major version
     :param minor_version: minor version
     """
-    ram = req.json.get("allocatedRAM", 2)
-    java_version = req.json.get("javaVersion", "default")
-    description = req.json.get("description", None)
-    name = req.json["name"]
-    port = req.json["port"]
     version_provider: VersionProvider = await req.app.server_manager.versions.provider_by_name(server)
-    return await req.app.server_manager.create_server(name, version_provider, major_version, minor_version, ram, port,
-                                                      java_version, description)
+    return await req.app.server_manager.create_server(data.name, version_provider, major_version, minor_version, data.allocatedRAM, data.port,
+                                                      data.javaVersion, data.description)
 
 
 @server_blueprint.delete("/<i:string>")

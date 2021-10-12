@@ -6,11 +6,12 @@ from functools import wraps
 from json import dumps as json_dumps
 from os.path import split as split_path
 from types import SimpleNamespace
-from typing import Union, Tuple, TYPE_CHECKING, Optional
+from typing import Union, Tuple, TYPE_CHECKING, Optional, Type
 from urllib.parse import urlparse
 
 import aiofiles
 import aiohttp
+import pydantic
 from bson.objectid import ObjectId
 from sanic.request import Request
 from sanic.response import json, HTTPResponse
@@ -55,6 +56,7 @@ class APIError:
     NO_PERMISSION = "no_permission", 403
     INVALID_SESSION = "invalid_session", 401
     SESSION_EXPIRED = "session_expired", 401
+    INVALID_PAYLOAD_SCHEMA = "invalid_payload_schema", 400
 
 
 def json_error(error: Tuple[str, int], description: str, status: int = 400, **additional) -> HTTPResponse:
@@ -153,6 +155,19 @@ def requires_server_online(online: bool = True):
             if online != req.ctx.server.running:
                 return json_error(APIError.INVALID_SERVER_STATUS, f"this endpoint requires the server to be {'online' if online else 'offline'}", 423)
             return await f(req, *args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def bind_model(model: Type[pydantic.BaseModel]):
+    def decorator(f):
+        @wraps(f)
+        async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
+            try:
+                data = model(**req.json)
+            except pydantic.ValidationError as e:
+                return json_error(APIError.INVALID_PAYLOAD_SCHEMA, "invalid payload type", errors=e.errors())
+            return await f(req, data, *args, **kwargs)
         return decorated_function
     return decorator
 
