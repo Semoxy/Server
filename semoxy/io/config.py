@@ -47,12 +47,12 @@ class Config:
     DISABLE_ROOT: bool = False
 
     @staticmethod
-    def load(mcweb) -> None:
+    def load(semoxy) -> None:
         """
         loads the config file and stores it's values as class attributes
         """
         Config.START_TIME = int(time.time())
-        Config.SEMOXY_INSTANCE = mcweb
+        Config.SEMOXY_INSTANCE = semoxy
         config_secret = Config.get_docker_secret("config")
         if config_secret:
             data = json.loads(config_secret)

@@ -5,8 +5,7 @@ import socket
 from functools import wraps
 from json import dumps as json_dumps
 from os.path import split as split_path
-from types import SimpleNamespace
-from typing import Union, Tuple, TYPE_CHECKING, Optional, Type
+from typing import Union, Tuple, Type
 from urllib.parse import urlparse
 
 import aiofiles
@@ -18,20 +17,6 @@ from sanic.response import json, HTTPResponse
 
 from semoxy.io.config import Config
 from .io.regexes import Regexes
-
-if TYPE_CHECKING:
-    from .server import Semoxy
-    from .models.auth import User, Session
-
-
-class SemoxyRequestContext(SimpleNamespace):
-    semoxy: Semoxy
-    user: Optional[User]
-    session: Optional[Session]
-
-
-class SemoxyRequest(Request):
-    ctx: SemoxyRequestContext
 
 
 class APIError:
@@ -59,7 +44,7 @@ class APIError:
     INVALID_PAYLOAD_SCHEMA = "invalid_payload_schema", 400
 
 
-def json_error(error: Tuple[str, int], description: str, status: int = 400, **additional) -> HTTPResponse:
+def json_error(error: Tuple[str, int], description: str, **additional) -> HTTPResponse:
     """
     generates a json error api response
     :param error: the error code, a value of APIError

@@ -4,7 +4,7 @@ abstraction for websocket packet building
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, TYPE_CHECKING, Tuple
+from typing import Any, Dict, TYPE_CHECKING, Tuple, Union
 
 from bson.objectid import ObjectId
 
@@ -120,7 +120,7 @@ class AuthenticationSuccessPacket(BasePacket):
 class StatUpdatePacket(BasePacket):
     ACTION = "STAT_UPDATE"
 
-    def __init__(self, server_id: ObjectId, new_stats: Tuple[int, float]):
+    def __init__(self, server_id: Union[ObjectId, str], new_stats: Tuple[int, float]):
         super(StatUpdatePacket, self).__init__()
         self.data["serverId"] = server_id
         self.data["ramUsage"] = new_stats[0]

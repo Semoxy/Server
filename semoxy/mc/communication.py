@@ -5,9 +5,10 @@ import asyncio
 import locale
 import os
 import subprocess
-import psutil
 import threading
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional
+
+import psutil
 
 CPU_COUNT = psutil.cpu_count()
 PYTHON_PROCESS = psutil.Process(os.getpid())

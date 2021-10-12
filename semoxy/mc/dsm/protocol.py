@@ -14,7 +14,8 @@ class PacketBuilder:
         self.id = pack_id
         self.bytes = bytes()
 
-    def pack_varint(self, number, max_bits=32):
+    @staticmethod
+    def pack_varint(number, max_bits=32):
         number_min = -1 << (max_bits - 1)
         number_max = +1 << (max_bits - 1)
         if not (number_min <= number < number_max):
@@ -31,7 +32,8 @@ class PacketBuilder:
                 break
         return out
 
-    def pack_uuid(self, u):
+    @staticmethod
+    def pack_uuid(u):
         if isinstance(u, uuid.UUID):
             return u.bytes
         return uuid.UUID(u).bytes
@@ -44,11 +46,12 @@ class PacketBuilder:
         data += bytes(s, "utf-8")
         return data
 
-    def pack_long(self, l):
-        return pack("<q", l)
+    @staticmethod
+    def pack_long(i):
+        return pack("<q", i)
 
-    def add_long(self, l):
-        self.bytes += self.pack_long(l)
+    def add_long(self, i):
+        self.bytes += self.pack_long(i)
 
     def add_bytes(self, b):
         self.bytes += b
@@ -94,8 +97,8 @@ class PacketBuffer(BytesIO):
     def read_long(self):
         return unpack("<q", self.read(8))[0]
 
-    def read_bytes(self, l):
-        return self.read(l)
+    def read_bytes(self, i):
+        return self.read(i)
 
 
 class TextComponent:
