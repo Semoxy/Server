@@ -164,7 +164,7 @@ async def query_server_events(req, i):
     events_per_page = min(int(events_per_page), 256)
 
     event_collection: AgnosticCollection = Config.SEMOXY_INSTANCE.odm.get_collection(ServerEvent)
-    cursor: AgnosticCursor = event_collection.find(query).skip(page * events_per_page).limit(events_per_page)
+    cursor: AgnosticCursor = event_collection.find(query)
 
     time_order = req.args.get("order")
     if time_order is not None:
@@ -175,7 +175,15 @@ async def query_server_events(req, i):
         else:
             return json_error(APIError.INVALID_SORT_DIRECTION, "use either asc or desc for order")
 
+    to_skip = page * events_per_page
+    cursor.skip(to_skip).limit(events_per_page)
+
     results = await cursor.to_list(events_per_page)
+
+    for res in results:
+        res["id"] = res["_id"]
+        del res["_id"]
+
     return json_response(results)
 
 
