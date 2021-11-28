@@ -8,7 +8,7 @@ from sanic.blueprints import Blueprint
 from sanic.response import HTTPResponse, file
 
 from ..io.config import Config
-from ..mc.mojang import download_head
+from ..mc.mojang import download_head, get_uuid
 from ..util import requires_login, json_response, renew_root_creation_token, json_error, APIError
 
 misc_blueprint = Blueprint("misc")
@@ -55,3 +55,13 @@ async def get_player_head(_, uuid: str):
         if not await download_head(UUID(uuid), head_file):
             return json_error(APIError.INVALID_NAME, "this minecraft account does not exist")
     return await file(head_file, mime_type="image/png")
+
+
+@misc_blueprint.get("/playerhead/name/<name:string>")
+async def get_player_head_by_name(req, name: str):
+    player_uuid = await get_uuid(name)
+
+    if not player_uuid:
+        return json_error(APIError.INVALID_NAME, "invalid player name")
+
+    return await get_player_head(req, str(player_uuid))
