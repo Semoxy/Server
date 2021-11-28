@@ -120,7 +120,7 @@ def server_endpoint():
             i = kwargs["i"]
             server = await Config.SEMOXY_INSTANCE.server_manager.get_server(i)
             if server is None:
-                return json_error(APIError.INVALID_SERVER, "no server was found for your id", 404)
+                return json_error(APIError.INVALID_SERVER, "no server was found for your id")
 
             req.ctx.server = server
             return await f(req, *args, **kwargs)
@@ -138,7 +138,7 @@ def requires_server_online(online: bool = True):
         @wraps(f)
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             if online != req.ctx.server.running:
-                return json_error(APIError.INVALID_SERVER_STATUS, f"this endpoint requires the server to be {'online' if online else 'offline'}", 423)
+                return json_error(APIError.INVALID_SERVER_STATUS, f"this endpoint requires the server to be {'online' if online else 'offline'}")
             return await f(req, *args, **kwargs)
         return decorated_function
     return decorator
@@ -182,9 +182,9 @@ def requires_login(logged_in: bool = True):
         @wraps(f)
         async def decorated_function(req: Request, *args, **kwargs) -> HTTPResponse:
             if logged_in and not req.ctx.user:
-                return json_error(APIError.UNAUTHENTICATED, "you need to be logged in to access this endpoint", 401)
+                return json_error(APIError.UNAUTHENTICATED, "you need to be logged in to access this endpoint")
             if not logged_in and req.ctx.user:
-                return json_error(APIError.NO_PERMISSION, "you can't use this endpoint while logged in", 403)
+                return json_error(APIError.NO_PERMISSION, "you can't use this endpoint while logged in")
             return await f(req, *args, **kwargs)
         return decorated_function
     return decorator

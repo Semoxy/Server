@@ -35,7 +35,7 @@ async def login_post(req, data: LoginPayload):
             session = await user.new_session()
             return json_response({"success": "logged in successfully", "data": {"sessionId": session.sid}})
 
-    return json_error(APIError.INVALID_CREDENTIALS, "either username or password are wrong", 401)
+    return json_error(APIError.INVALID_CREDENTIALS, "either username or password are wrong")
 
 
 @account_blueprint.get("/session")

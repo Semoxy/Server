@@ -174,7 +174,7 @@ class ServerManager:
             await version_provider.post_download(dir_, major_version, minor_version)
         except Exception as e:
             await Config.SEMOXY_INSTANCE.odm.delete(s.data)
-            return json_error(APIError.SERVER_VERSION_POST_INSTALL, " ".join(e.args), 500)
+            return json_error(APIError.SERVER_VERSION_POST_INSTALL, " ".join(e.args))
 
         self.servers.append(s)
 

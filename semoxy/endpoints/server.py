@@ -53,7 +53,7 @@ async def start_server(req, i):
     endpoints for starting the specified server
     """
     if await req.app.server_manager.server_running_on(port=req.ctx.server.data.port):
-        return json_error(APIError.PORT_IN_USE, "there is already a server running on that port", 423)
+        return json_error(APIError.PORT_IN_USE, "there is already a server running on that port")
     await req.ctx.server.start()
     return json_response({"success": "server started", "update": {"server": {"online_status": 1}}})
 
@@ -218,7 +218,7 @@ async def stop_server(req, i):
     stop_event = await req.ctx.server.stop()
 
     if stop_event is None:
-        return json_error(APIError.UNKNOWN, "error while stopping the server", 500)
+        return json_error(APIError.UNKNOWN, "error while stopping the server")
 
     block = req.args.get("block")
     if block:
@@ -238,7 +238,7 @@ async def restart(req, i):
     stop_event = await req.ctx.server.stop()
 
     if stop_event is None:
-        return json_error(APIError.UNKNOWN, "error while stopping the server", 500)
+        return json_error(APIError.UNKNOWN, "error while stopping the server")
 
     await stop_event.wait()
     await req.ctx.server.start()

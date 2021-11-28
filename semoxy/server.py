@@ -107,14 +107,14 @@ class Semoxy(Sanic):
         if sid:
             session = await self.odm.find_one(Session, Session.sid == sid)
             if not session:
-                return json_error(APIError.INVALID_SESSION, "the specified session id is not existing", 401)
+                return json_error(APIError.INVALID_SESSION, "the specified session id is not existing")
             if not session.is_expired:
                 await session.refresh()
                 req.ctx.user = session.user
                 req.ctx.session = session
             else:
                 await session.delete()
-                return json_error(APIError.SESSION_EXPIRED, "your session is expired", 401)
+                return json_error(APIError.SESSION_EXPIRED, "your session is expired")
 
     def start(self) -> None:
         """
