@@ -68,6 +68,13 @@ def json_response(di: Union[dict, list], **kwargs) -> HTTPResponse:
     return json(di, dumps=lambda s: json_dumps(s, default=serialize_objectids), **kwargs)
 
 
+def get_dummy_objid(timestamp: int) -> ObjectId:
+    """
+    generates a dummy ObjectId
+    """
+    return ObjectId(("%8x" % timestamp) + ("0" * 16))
+
+
 def serialize_objectids(v):
     """
     stringifies ObjectIds

@@ -2,11 +2,9 @@
 all minecraft server related endpoints
 """
 import json
-from datetime import datetime
 from typing import Optional
 
 import pydantic
-from bson.objectid import ObjectId
 from motor.core import AgnosticCollection, AgnosticCursor
 from pymongo import ASCENDING, DESCENDING
 from sanic.blueprints import Blueprint
@@ -19,7 +17,7 @@ from ..mc.versions.base import VersionProvider
 from ..models.auth import Session
 from ..models.event import EventType, ServerEvent
 from ..util import server_endpoint, requires_server_online, json_response, requires_login, \
-    APIError, json_error, bind_model
+    APIError, json_error, bind_model, get_dummy_objid
 
 server_blueprint = Blueprint("server", url_prefix="server")
 
@@ -139,15 +137,15 @@ async def query_server_events(req, i):
 
     maximal_time = req.args.get("max_time")
     if maximal_time is not None:
-        max_id = ObjectId.from_datetime(datetime.fromtimestamp(int(maximal_time)))
-        query["_id"] = {"$le": max_id}
+        max_id = get_dummy_objid(int(maximal_time))
+        query["_id"] = {"$lte": max_id}
 
     minimal_time = req.args.get("min_time")
     if minimal_time is not None:
-        min_id = ObjectId.from_datetime(datetime.fromtimestamp(int(minimal_time)))
+        min_id = get_dummy_objid(int(minimal_time))
         if "_id" not in query:
             query["_id"] = {}
-        query["_id"]["$ge"] = min_id
+        query["_id"]["$gte"] = min_id
 
     event_type = req.args.get("type")
     if event_type is not None:
